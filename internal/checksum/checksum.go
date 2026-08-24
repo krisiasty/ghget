@@ -17,13 +17,24 @@ import (
 )
 
 var (
-	digestRE = regexp.MustCompile(`(?i)\b([a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}|[a-f0-9]{128})\b`)
-	bsdRE    = regexp.MustCompile(`(?i)^\s*[a-z0-9-]+\s*\((.+)\)\s*=\s*([a-f0-9]+)\s*$`)
+	digestRE        = regexp.MustCompile(`(?i)\b([a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}|[a-f0-9]{128})\b`)
+	bsdRE           = regexp.MustCompile(`(?i)^\s*[a-z0-9-]+\s*\((.+)\)\s*=\s*([a-f0-9]+)\s*$`)
+	sidecarSuffixes = []string{".md5", ".sha1", ".sha256", ".sha512", ".md5sum", ".sha1sum", ".sha256sum", ".sha512sum", ".checksum"}
 )
 
 type Entry struct {
 	Filename string
 	Digest   string
+}
+
+type MismatchError struct {
+	AssetName string
+	Expected  string
+	Actual    string
+}
+
+func (e *MismatchError) Error() string {
+	return fmt.Sprintf("checksum mismatch for %s: expected %s, got %s", e.AssetName, e.Expected, e.Actual)
 }
 
 func Parse(r io.Reader) ([]Entry, error) {
@@ -99,9 +110,14 @@ func VerifyFile(path, assetName string, entries []Entry) error {
 	}
 	actual := hex.EncodeToString(h.Sum(nil))
 	if actual != strings.ToLower(entry.Digest) {
-		return fmt.Errorf("checksum mismatch for %s: expected %s, got %s", assetName, entry.Digest, actual)
+		return &MismatchError{AssetName: assetName, Expected: entry.Digest, Actual: actual}
 	}
 	return nil
+}
+
+func HasEntry(assetName string, entries []Entry) bool {
+	_, ok := findEntry(assetName, entries)
+	return ok
 }
 
 func IsChecksumAsset(name string) bool {
@@ -111,7 +127,7 @@ func IsChecksumAsset(name string) bool {
 			return false
 		}
 	}
-	for _, suffix := range []string{".md5", ".sha1", ".sha256", ".sha512", ".md5sum", ".sha1sum", ".sha256sum", ".sha512sum"} {
+	for _, suffix := range sidecarSuffixes {
 		if strings.HasSuffix(lower, suffix) {
 			return true
 		}
@@ -125,7 +141,7 @@ func IsChecksumAsset(name string) bool {
 
 func TargetFromSidecar(name string) string {
 	lower := strings.ToLower(name)
-	for _, suffix := range []string{".md5", ".sha1", ".sha256", ".sha512", ".md5sum", ".sha1sum", ".sha256sum", ".sha512sum"} {
+	for _, suffix := range sidecarSuffixes {
 		if strings.HasSuffix(lower, suffix) {
 			return name[:len(name)-len(suffix)]
 		}

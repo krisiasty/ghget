@@ -18,6 +18,10 @@ type options struct {
 	extract      bool
 	executable   bool
 	unquarantine bool
+	force        bool
+	keep         bool
+	flat         bool
+	debug        bool
 	help         bool
 }
 
@@ -65,6 +69,14 @@ func parseOptions(args []string) (options, error) {
 			opts.executable = true
 		case "-u", "--unquarantine":
 			opts.unquarantine = true
+		case "-f", "--force":
+			opts.force = true
+		case "-k", "--keep":
+			opts.keep = true
+		case "--flat":
+			opts.flat = true
+		case "--debug":
+			opts.debug = true
 		case "-d", "--dir":
 			v, err := value()
 			if err != nil {
@@ -110,6 +122,12 @@ func parseOptions(args []string) (options, error) {
 	}
 	if opts.output != "" && opts.extract {
 		return opts, fmt.Errorf("--output cannot be used with --extract")
+	}
+	if opts.keep && !opts.extract {
+		return opts, fmt.Errorf("--keep requires --extract")
+	}
+	if opts.flat && !opts.extract {
+		return opts, fmt.Errorf("--flat requires --extract")
 	}
 	return opts, nil
 }

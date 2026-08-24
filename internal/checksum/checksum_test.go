@@ -56,4 +56,7 @@ func TestIsChecksumAsset(t *testing.T) {
 	if got := TargetFromSidecar("tool.tar.gz.sha256"); got != "tool.tar.gz" {
 		t.Fatalf("TargetFromSidecar() = %q", got)
 	}
+	if got := TargetFromSidecar("tool.zip.checksum"); got != "tool.zip" {
+		t.Fatalf("TargetFromSidecar() = %q", got)
+	}
 }

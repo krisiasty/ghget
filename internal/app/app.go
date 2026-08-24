@@ -6,18 +6,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/krisiasty/ghget/internal/archive"
 	"github.com/krisiasty/ghget/internal/checksum"
 	gh "github.com/krisiasty/ghget/internal/github"
 	"github.com/krisiasty/ghget/internal/matcher"
+	"github.com/krisiasty/ghget/internal/tagorder"
 )
 
 const usage = `Usage:
@@ -25,7 +29,7 @@ const usage = `Usage:
   ghget OWNER/REPO[@TAG] --list
   ghget OWNER/REPO --tag
 
-TAG defaults to "latest".
+TAG defaults to "latest". Use {tag} in FILE_PATTERN to insert the resolved tag.
 
 Options:
   -l, --list                 list release assets
@@ -38,6 +42,10 @@ Options:
   -c, --checksum VALUE       checksum digest or checksum-file path
   -x, --executable           make downloaded or extracted files executable
   -u, --unquarantine        remove macOS quarantine attributes using sudo
+  -f, --force                overwrite existing files
+  -k, --keep                 keep the downloaded archive after extraction
+      --flat                 extract all files directly into the destination directory
+      --debug                log HTTP telemetry to stderr
   -h, --help                 show this help
 `
 
@@ -53,6 +61,7 @@ type App struct {
 	stdout       io.Writer
 	stderr       io.Writer
 	unquarantine func(context.Context, []string) error
+	logger       *slog.Logger
 }
 
 func New(httpClient *http.Client, stdout, stderr io.Writer) *App {
@@ -77,6 +86,13 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		_, err := io.WriteString(a.stdout, usage)
 		return err
 	}
+	if opts.debug {
+		a.logger = slog.New(slog.NewTextHandler(a.stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		if client, ok := a.client.(interface{ SetLogger(*slog.Logger) }); ok {
+			client.SetLogger(a.logger)
+		}
+		a.logger.DebugContext(ctx, "debug telemetry enabled")
+	}
 	owner, repo, pattern, tag, err := parseTarget(opts.target)
 	if err != nil {
 		return err
@@ -86,11 +102,15 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		if pattern != "" || tag != "latest" {
 			return fmt.Errorf("--tag expects OWNER/REPO without a file or tag")
 		}
+		started := time.Now()
+		a.debug(ctx, "listing release tags", "owner", owner, "repo", repo)
 		tags, err := a.client.ListTags(ctx, owner, repo)
 		if err != nil {
 			return err
 		}
-		for _, releaseTag := range tags {
+		a.debug(ctx, "release tags listed", "owner", owner, "repo", repo, "tag_count", len(tags), "duration", time.Since(started))
+		orderedTags := tagorder.Sort(tags)
+		for _, releaseTag := range orderedTags {
 			if _, err := fmt.Fprintln(a.stdout, releaseTag); err != nil {
 				return err
 			}
@@ -128,7 +148,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		names[i] = asset.Name
 		byName[asset.Name] = asset
 	}
-	selectedNames, err := matcher.Select(names, pattern, opts.mode)
+	selectedNames, err := selectAssetsForTag(names, pattern, tag, opts.mode)
 	if err != nil {
 		return err
 	}
@@ -139,16 +159,23 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		return fmt.Errorf("--output requires exactly one matching asset (matched %d)", len(selectedNames))
 	}
 
-	entries, err := a.checksums(ctx, assets, opts.checksum)
+	verification, err := a.checksums(ctx, assets, selectedNames, opts.checksum)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(opts.directory, 0o755); err != nil {
 		return fmt.Errorf("create destination directory: %w", err)
 	}
+	skip, err := a.checkExistingDownloads(selectedNames, byName, opts, verification)
+	if err != nil {
+		return err
+	}
 	created := make([]string, 0)
 	for _, name := range selectedNames {
-		paths, err := a.downloadOne(ctx, byName[name], opts, entries)
+		if skip[name] {
+			continue
+		}
+		paths, err := a.downloadOne(ctx, byName[name], opts, verification)
 		if err != nil {
 			return err
 		}
@@ -169,31 +196,137 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	return nil
 }
 
-func (a *App) checksums(ctx context.Context, assets []gh.Asset, provided string) ([]checksum.Entry, error) {
-	if provided != "" {
-		return checksum.ParseValueOrFile(provided)
+func selectAssetsForTag(names []string, pattern, tag string, mode matcher.Mode) ([]string, error) {
+	if !strings.Contains(pattern, "{tag}") {
+		return matcher.Select(names, pattern, mode)
 	}
-	entries := make([]checksum.Entry, 0)
+	for _, variant := range tagorder.Variants(tag) {
+		replacement := variant
+		switch mode {
+		case matcher.Glob:
+			replacement = escapeGlob(replacement)
+		case matcher.Regex:
+			replacement = regexp.QuoteMeta(replacement)
+		}
+		expanded := strings.ReplaceAll(pattern, "{tag}", replacement)
+		selected, err := matcher.Select(names, expanded, mode)
+		if err != nil {
+			return nil, err
+		}
+		if len(selected) > 0 {
+			return selected, nil
+		}
+	}
+	return nil, nil
+}
+
+func escapeGlob(value string) string {
+	var escaped strings.Builder
+	for _, char := range value {
+		if strings.ContainsRune(`\\*?[`, char) {
+			escaped.WriteByte('\\')
+		}
+		escaped.WriteRune(char)
+	}
+	return escaped.String()
+}
+
+func (a *App) checkExistingDownloads(selected []string, assets map[string]gh.Asset, opts options, verification verificationData) (map[string]bool, error) {
+	skip := make(map[string]bool)
+	if opts.extract || opts.force {
+		return skip, nil
+	}
+	for _, name := range selected {
+		asset := assets[name]
+		destination, err := downloadDestination(asset, opts)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Lstat(destination)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("destination is a directory: %s", destination)
+		}
+		if !verification.verifyAll && !verification.verify[name] {
+			return nil, fmt.Errorf("destination already exists and no checksum is available for comparison: %s; use --force to overwrite", destination)
+		}
+		if err := checksum.VerifyFile(destination, asset.Name, verification.entries); err != nil {
+			var mismatch *checksum.MismatchError
+			if errors.As(err, &mismatch) {
+				return nil, fmt.Errorf("destination already exists but does not match the remote checksum: %s: %w; use --force to overwrite", destination, err)
+			}
+			return nil, fmt.Errorf("destination already exists but could not be compared with the remote checksum: %s: %w; use --force to overwrite", destination, err)
+		}
+		skip[name] = true
+		_, _ = fmt.Fprintf(a.stderr, "already exists and checksum matches %s\n", destination)
+	}
+	return skip, nil
+}
+
+func (a *App) debug(ctx context.Context, message string, args ...any) {
+	if a.logger != nil {
+		a.logger.DebugContext(ctx, message, args...)
+	}
+}
+
+type verificationData struct {
+	entries   []checksum.Entry
+	fetched   map[string][]byte
+	verify    map[string]bool
+	verifyAll bool
+}
+
+func (a *App) checksums(ctx context.Context, assets []gh.Asset, selected []string, provided string) (verificationData, error) {
+	if provided != "" {
+		entries, err := checksum.ParseValueOrFile(provided)
+		return verificationData{entries: entries, verifyAll: true}, err
+	}
+	data := verificationData{fetched: make(map[string][]byte), verify: make(map[string]bool)}
+	wanted := make(map[string]bool, len(selected))
+	for _, name := range selected {
+		if !checksum.IsChecksumAsset(name) {
+			wanted[name] = true
+		}
+	}
+	sources := make([]gh.Asset, 0)
+	sourceNames := make([]string, 0)
 	for _, asset := range assets {
 		if !checksum.IsChecksumAsset(asset.Name) {
 			continue
 		}
+		if target := checksum.TargetFromSidecar(asset.Name); target != "" && !wanted[target] {
+			continue
+		}
+		sources = append(sources, asset)
+		sourceNames = append(sourceNames, asset.Name)
+	}
+	a.debug(ctx, "automatic checksum sources selected", "source_count", len(sources), "sources", sourceNames)
+
+	entries := make([]checksum.Entry, 0)
+	for _, asset := range sources {
 		body, _, err := a.client.Download(ctx, asset)
 		if err != nil {
-			return nil, fmt.Errorf("download checksum asset: %w", err)
+			return data, fmt.Errorf("download checksum asset: %w", err)
 		}
 		content, readErr := io.ReadAll(io.LimitReader(body, 16<<20))
 		closeErr := body.Close()
 		if readErr != nil {
-			return nil, fmt.Errorf("read checksum asset %s: %w", asset.Name, readErr)
+			return data, fmt.Errorf("read checksum asset %s: %w", asset.Name, readErr)
 		}
 		if closeErr != nil {
-			return nil, closeErr
+			return data, closeErr
 		}
+		_, _ = fmt.Fprintf(a.stderr, "downloaded %s\n", asset.Name)
 		parsed, err := checksum.Parse(bytes.NewReader(content))
 		if err != nil {
-			return nil, fmt.Errorf("parse checksum asset %s: %w", asset.Name, err)
+			return data, fmt.Errorf("parse checksum asset %s: %w", asset.Name, err)
 		}
+		data.fetched[asset.Name] = content
 		if targetName := checksum.TargetFromSidecar(asset.Name); targetName != "" {
 			for i := range parsed {
 				if parsed[i].Filename == "" {
@@ -203,13 +336,48 @@ func (a *App) checksums(ctx context.Context, assets []gh.Asset, provided string)
 		}
 		entries = append(entries, parsed...)
 	}
-	return entries, nil
+	data.entries = entries
+	fallbackNames := make([]string, 0)
+	for _, name := range selected {
+		if checksum.HasEntry(name, data.entries) {
+			data.verify[name] = true
+			continue
+		}
+		asset := findAsset(assets, name)
+		if asset.Digest == "" {
+			continue
+		}
+		data.entries = append(data.entries, checksum.Entry{Filename: name, Digest: asset.Digest})
+		data.verify[name] = true
+		fallbackNames = append(fallbackNames, name)
+	}
+	if len(fallbackNames) > 0 {
+		a.debug(ctx, "using GitHub-generated checksum fallback", "asset_count", len(fallbackNames), "assets", fallbackNames)
+	}
+	return data, nil
 }
 
-func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, entries []checksum.Entry) ([]string, error) {
-	body, _, err := a.client.Download(ctx, asset)
-	if err != nil {
-		return nil, err
+func findAsset(assets []gh.Asset, name string) gh.Asset {
+	for _, asset := range assets {
+		if asset.Name == name {
+			return asset
+		}
+	}
+	return gh.Asset{}
+}
+
+func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, verification verificationData) ([]string, error) {
+	var body io.ReadCloser
+	downloaded := false
+	if content, ok := verification.fetched[asset.Name]; ok {
+		body = io.NopCloser(bytes.NewReader(content))
+	} else {
+		var err error
+		body, _, err = a.client.Download(ctx, asset)
+		if err != nil {
+			return nil, err
+		}
+		downloaded = true
 	}
 	tmp, err := os.CreateTemp(opts.directory, ".ghget-*")
 	if err != nil {
@@ -230,39 +398,125 @@ func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, ent
 	if closeBodyErr != nil {
 		return nil, closeBodyErr
 	}
-	if len(entries) > 0 {
-		if err := checksum.VerifyFile(tmpPath, asset.Name, entries); err != nil {
+	if downloaded {
+		_, _ = fmt.Fprintf(a.stderr, "downloaded %s\n", downloadDisplayPath(asset, opts))
+	}
+	shouldVerify := len(verification.entries) > 0 && (verification.verifyAll || verification.verify[asset.Name])
+	if shouldVerify {
+		if err := checksum.VerifyFile(tmpPath, asset.Name, verification.entries); err != nil {
 			return nil, err
 		}
 		_, _ = fmt.Fprintf(a.stderr, "verified %s\n", asset.Name)
 	}
 
 	if opts.extract {
-		paths, err := archive.Extract(tmpPath, opts.directory, asset.Name)
-		if err != nil {
-			return nil, err
+		archiveDestination := filepath.Join(opts.directory, asset.Name)
+		if opts.keep {
+			if err := checkWritableDestination(archiveDestination, opts.force); err != nil {
+				return nil, err
+			}
 		}
-		_, _ = fmt.Fprintf(a.stderr, "extracted %s\n", asset.Name)
+		results, extractErr := archive.Extract(tmpPath, opts.directory, asset.Name, archive.Options{
+			Force: opts.force,
+			Flat:  opts.flat,
+		})
+		paths := make([]string, 0, len(results)+1)
+		for _, result := range results {
+			displayPath := extractedDisplayPath(result.Path, opts.directory)
+			if result.Written {
+				_, _ = fmt.Fprintf(a.stderr, "extracted %s\n", displayPath)
+			} else {
+				_, _ = fmt.Fprintf(a.stderr, "already exists and content matches %s\n", displayPath)
+			}
+			paths = append(paths, result.Path)
+		}
+		if extractErr != nil {
+			return nil, extractErr
+		}
+		if opts.keep {
+			if err := saveTemporaryFile(tmpPath, archiveDestination, opts.force); err != nil {
+				return nil, fmt.Errorf("keep archive %s: %w", asset.Name, err)
+			}
+			paths = append(paths, archiveDestination)
+			_, _ = fmt.Fprintf(a.stderr, "kept archive %s\n", archiveDestination)
+		}
 		return paths, nil
 	}
+	destination, err := downloadDestination(asset, opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := saveTemporaryFile(tmpPath, destination, opts.force); err != nil {
+		return nil, fmt.Errorf("save %s: %w", asset.Name, err)
+	}
+	return []string{destination}, nil
+}
+
+func downloadDisplayPath(asset gh.Asset, opts options) string {
+	if opts.extract {
+		return filepath.Join(opts.directory, asset.Name)
+	}
+	destination, err := downloadDestination(asset, opts)
+	if err != nil {
+		return asset.Name
+	}
+	return destination
+}
+
+func extractedDisplayPath(path, destination string) string {
+	root, err := filepath.Abs(destination)
+	if err != nil {
+		return path
+	}
+	relative, err := filepath.Rel(root, path)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return path
+	}
+	return filepath.Join(destination, relative)
+}
+
+func checkWritableDestination(destination string, force bool) error {
+	info, err := os.Lstat(destination)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !force {
+		return fmt.Errorf("destination already exists: %s", destination)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("cannot overwrite directory: %s", destination)
+	}
+	return nil
+}
+
+func saveTemporaryFile(tmpPath, destination string, force bool) error {
+	if err := checkWritableDestination(destination, force); err != nil {
+		return err
+	}
+	if force {
+		if _, err := os.Lstat(destination); err == nil {
+			if err := os.Remove(destination); err != nil {
+				return fmt.Errorf("remove existing destination %s: %w", destination, err)
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return os.Rename(tmpPath, destination)
+}
+
+func downloadDestination(asset gh.Asset, opts options) (string, error) {
 	outputName := asset.Name
 	if opts.output != "" {
 		outputName = opts.output
 	}
 	if filepath.Base(outputName) != outputName || outputName == "." || outputName == ".." {
-		return nil, fmt.Errorf("output name must be a filename, not a path: %q", outputName)
+		return "", fmt.Errorf("output name must be a filename, not a path: %q", outputName)
 	}
-	destination := filepath.Join(opts.directory, outputName)
-	if _, err := os.Lstat(destination); err == nil {
-		return nil, fmt.Errorf("destination already exists: %s", destination)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	if err := os.Rename(tmpPath, destination); err != nil {
-		return nil, fmt.Errorf("save %s: %w", asset.Name, err)
-	}
-	_, _ = fmt.Fprintf(a.stderr, "downloaded %s\n", destination)
-	return []string{destination}, nil
+	return filepath.Join(opts.directory, outputName), nil
 }
 
 func parseTarget(target string) (owner, repo, pattern, tag string, err error) {
