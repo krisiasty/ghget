@@ -36,7 +36,7 @@ Options:
   -t, --tag, --tags          list release tags
   -g, --glob                 treat FILE_PATTERN as a glob
   -r, --regex                treat FILE_PATTERN as a regular expression
-  -d, --dir PATH             destination directory (default: current directory)
+  -d, --dir PATH             destination directory (default: .); expands ~ and $HOME
   -o, --output NAME          rename a single downloaded asset
   -e, --extract              extract ZIP, TAR, TAR.GZ/TGZ, or GZIP assets
   -c, --checksum VALUE       checksum digest or checksum-file path

@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/krisiasty/ghget/internal/matcher"
@@ -82,7 +84,10 @@ func parseOptions(args []string) (options, error) {
 			if err != nil {
 				return opts, err
 			}
-			opts.directory = v
+			opts.directory, err = expandHomePath(v)
+			if err != nil {
+				return opts, err
+			}
 		case "-o", "--output":
 			v, err := value()
 			if err != nil {
@@ -130,4 +135,35 @@ func parseOptions(args []string) (options, error) {
 		return opts, fmt.Errorf("--flat requires --extract")
 	}
 	return opts, nil
+}
+
+func expandHomePath(value string) (string, error) {
+	remainder, expand := homePathRemainder(value)
+	if !expand {
+		return value, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+	if remainder == "" {
+		return home, nil
+	}
+	return filepath.Join(home, filepath.FromSlash(remainder)), nil
+}
+
+func homePathRemainder(value string) (string, bool) {
+	for _, prefix := range []string{"~", "$HOME", "${HOME}"} {
+		if value == prefix {
+			return "", true
+		}
+		if len(value) > len(prefix) && os.IsPathSeparator(value[len(prefix)]) {
+			remainder := value[len(prefix)+1:]
+			for len(remainder) > 0 && os.IsPathSeparator(remainder[0]) {
+				remainder = remainder[1:]
+			}
+			return remainder, true
+		}
+	}
+	return "", false
 }

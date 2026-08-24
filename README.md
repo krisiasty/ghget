@@ -60,7 +60,7 @@ list uses ascending alphabetic order instead.
 | `-t` | `--tag`, `--tags` | List release tags |
 | `-g` | `--glob` | Treat the file pattern as a glob |
 | `-r` | `--regex` | Treat the file pattern as a Go regular expression |
-| `-d PATH` | `--dir PATH` | Choose the destination directory |
+| `-d PATH` | `--dir PATH` | Choose the destination directory; expand `~` or `$HOME` |
 | `-o NAME` | `--output NAME` | Rename a single downloaded asset |
 | `-e` | `--extract` | Extract ZIP, TAR, TAR.GZ/TGZ, or GZIP |
 | `-c VALUE` | `--checksum VALUE` | Verify against a digest or checksum file |
@@ -73,6 +73,10 @@ list uses ascending alphabetic order instead.
 
 Options may appear before or after the target. Existing files are never
 overwritten unless `--force` is supplied.
+
+Missing destination directories and their parents are created automatically.
+At the beginning of a `--dir` path, `~`, `$HOME`, and `${HOME}` resolve to the
+current user's home directory even when shell quoting prevents expansion.
 
 When a download destination already exists without `--force`, `ghget` compares
 it with the selected published or GitHub-generated checksum before downloading
