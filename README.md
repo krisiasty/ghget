@@ -60,6 +60,7 @@ the swap and restored if the download or checksum fails.
 
 ```text
 ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
+ghget OWNER/REPO[@TAG] --auto [--install]
 ghget OWNER/REPO[@TAG] --list
 ghget OWNER/REPO --tag
 ghget --upgrade
@@ -94,6 +95,9 @@ ghget owner/project/'project_*_linux_*.tar.gz@v2.0.0' --glob
 # Resolve latest, then try both tlsx_v1.3.0_... and tlsx_1.3.0_....
 ghget projectdiscovery/tlsx/'tlsx_{tag}_macOS_amd64.zip'
 
+# Let ghget find the asset for this platform, then install just the programs.
+ghget astral-sh/uv --auto --install --dir ~/.local/bin
+
 # Select the release asset for this repository, architecture, vendor, and OS.
 ghget astral-sh/uv/'{repo}-{arch}-{vendor}-{os}.tar.gz'
 
@@ -121,6 +125,9 @@ list uses ascending alphabetic order instead.
 
 | Short | Long | Description |
 | --- | --- | --- |
+| `-a` | `--auto` | Select the asset built for this OS, CPU, and C library |
+| `-i` | `--install` | Place only the programs an asset contains |
+| | `--first` | Take the top match when `--auto` finds a tie |
 | `-l` | `--list` | List assets for a release |
 | `-t` | `--tag`, `--tags` | List release tags |
 | `-g` | `--glob` | Treat the file pattern as a glob |
@@ -175,6 +182,80 @@ directories stored in the archive and place every regular file directly in the
 destination directory. If flattened entries have the same filename, identical
 content is accepted while differing content requires `--force` (the later entry
 wins when forced). Both `--flat` and `--keep` require `--extract`.
+
+## Automatic selection
+
+`--auto` picks the asset built for the current machine, so a project's naming
+convention does not have to be known in advance:
+
+```sh
+ghget astral-sh/uv --auto
+```
+
+Selection reads each asset name rather than matching a list of known
+conventions. Assets naming a different operating system or architecture are
+rejected outright, as are checksum and signature sidecars, `.deb`, `.rpm`,
+`.msi`, `.pkg`, `.dmg`, AppImage, and source archives. Whatever survives is
+ranked, preferring a matching C library, an explicitly named architecture,
+fewer unrecognised words in the name, a bare executable over an archive, and
+the archive format conventional for the platform.
+
+On Linux, `--auto` prefers a glibc build, or a musl build on a musl host such as
+Alpine, detected from the loader in `/lib` or from `/etc/alpine-release`. A
+glibc build is never selected on a musl host, because it cannot run there; a
+musl build is accepted on a glibc host when nothing else is published. On
+Windows, an MSVC build is preferred over a MinGW one. On macOS only the native
+architecture is selected, along with universal builds; Rosetta is never assumed.
+
+When two assets are equally good, `ghget` prints both and stops rather than
+guessing. Name one directly, or add `--first` to take the top-ranked match:
+
+```sh
+ghget jqlang/jq --auto --first
+```
+
+When nothing matches, each asset is listed with the reason it was rejected. Add
+`--debug` to see the full ranking for a successful selection too.
+
+`--auto` selects the asset; it does not change what is written to disk. The
+asset is downloaded as published, so `astral-sh/uv --auto` saves the `.tar.gz`.
+Add `--extract` to unpack it in full, or `--install` to take just the programs.
+
+## Installing programs
+
+`--install` writes only the executables an asset contains, discarding
+documentation, licences, manual pages, and shell completions:
+
+```sh
+ghget astral-sh/uv --auto --install --dir ~/.local/bin
+```
+
+That leaves `uv` and `uvx` in the destination and nothing else, even though the
+published archive stores them inside a `uv-x86_64-apple-darwin/` directory. The
+same command works for a project shipping a bare binary, an archive with a
+`bin/` prefix, or a binary sitting beside its documentation.
+
+Programs are recognised by the target platform rather than by inspecting the
+archive: on Windows by the `.exe`, `.com`, `.bat`, or `.cmd` extension, because
+a ZIP built with native Windows tooling records no permissions, and everywhere
+else by the executable bit. Shared libraries are never treated as programs. If
+an archive holds a `bin` directory, only its contents are installed; otherwise
+the programs closest to the top of the archive are. Installed files are given
+mode `0755`.
+
+A bare binary is installed under the name of the program it holds, so
+`kind-linux-amd64` is written as `kind`. Use `--output` to choose another name.
+
+`--install` needs no `--auto`; it works with an explicit pattern too, and
+`--keep` retains the downloaded archive beside the installed programs:
+
+```sh
+ghget owner/project/'project_*_linux_amd64.tar.gz' --glob --install --keep
+```
+
+An archive containing no executable is reported as an error rather than
+unpacked, and `--install` cannot be combined with `--extract`, because both
+decide what lands on disk.
 
 ### Debugging HTTP requests
 

@@ -1,0 +1,11 @@
+gitleaks_8.30.1_checksums.txt
+gitleaks_8.30.1_darwin_arm64.tar.gz
+gitleaks_8.30.1_darwin_x64.tar.gz
+gitleaks_8.30.1_linux_arm64.tar.gz
+gitleaks_8.30.1_linux_armv6.tar.gz
+gitleaks_8.30.1_linux_armv7.tar.gz
+gitleaks_8.30.1_linux_x32.tar.gz
+gitleaks_8.30.1_linux_x64.tar.gz
+gitleaks_8.30.1_windows_arm64.zip
+gitleaks_8.30.1_windows_x32.zip
+gitleaks_8.30.1_windows_x64.zip

@@ -15,6 +15,9 @@ type options struct {
 	directory    string
 	directorySet bool
 	upgrade      bool
+	auto         bool
+	install      bool
+	first        bool
 	output       string
 	checksum     string
 	mode         matcher.Mode
@@ -59,6 +62,12 @@ func parseOptions(args []string) (options, error) {
 			opts.version = true
 		case "--upgrade":
 			opts.upgrade = true
+		case "-a", "--auto":
+			opts.auto = true
+		case "-i", "--install":
+			opts.install = true
+		case "--first":
+			opts.first = true
 		case "-l", "--list":
 			opts.listAssets = true
 		case "-t", "--tag", "--tags":
@@ -143,13 +152,45 @@ func parseOptions(args []string) (options, error) {
 	if opts.output != "" && opts.extract {
 		return opts, errors.New("--output cannot be used with --extract")
 	}
-	if opts.keep && !opts.extract {
-		return opts, errors.New("--keep requires --extract")
+	if opts.keep && !opts.extract && !opts.install {
+		return opts, errors.New("--keep requires --extract or --install")
 	}
 	if opts.flat && !opts.extract {
 		return opts, errors.New("--flat requires --extract")
 	}
+	if err := validateAuto(opts, modeSet); err != nil {
+		return opts, err
+	}
 	return opts, nil
+}
+
+// validateAuto rejects combinations that would give --auto or --install
+// nothing to do, or two conflicting answers to the same question.
+func validateAuto(opts options, modeSet bool) error {
+	// --install decides what lands on disk, which is what --extract also decides.
+	if opts.install && opts.extract {
+		return errors.New("--install cannot be combined with --extract")
+	}
+	if opts.first && !opts.auto {
+		return errors.New("--first requires --auto; it resolves an ambiguous automatic selection")
+	}
+	if !opts.auto {
+		return nil
+	}
+	conflicts := []struct {
+		set  bool
+		name string
+	}{
+		{opts.listAssets, "--list"},
+		{opts.listTags, "--tag"},
+		{modeSet, "--glob or --regex"},
+	}
+	for _, conflict := range conflicts {
+		if conflict.set {
+			return fmt.Errorf("--auto cannot be combined with %s", conflict.name)
+		}
+	}
+	return nil
 }
 
 func expandHomePath(value string) (string, error) {
@@ -206,6 +247,9 @@ func validateUpgrade(opts options, modeSet bool) error {
 		{opts.checksum != "", "--checksum"},
 		{opts.executable, "--executable"},
 		{opts.unquarantine, "--unquarantine"},
+		{opts.auto, "--auto"},
+		{opts.install, "--install"},
+		{opts.first, "--first"},
 		{modeSet, "--glob or --regex"},
 	}
 	for _, conflict := range conflicts {
