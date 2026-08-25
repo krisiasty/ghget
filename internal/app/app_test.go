@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -109,6 +110,25 @@ func TestDownloadWithTagPlaceholder(t *testing.T) {
 	}
 }
 
+func TestDownloadWithRuntimePlaceholders(t *testing.T) {
+	assetName := fmt.Sprintf("tool-%s-%s-%s.zip",
+		architectureVariants(runtime.GOARCH)[0], vendorVariants(runtime.GOOS)[0], operatingSystemVariants(runtime.GOOS)[0])
+	client := &fakeClient{
+		tag:     "v1.0.0",
+		assets:  []gh.Asset{{Name: assetName}},
+		content: map[string]string{assetName: "archive"},
+	}
+	dir := t.TempDir()
+	if err := NewWithClient(client, io.Discard, io.Discard).Run(context.Background(), []string{
+		"acme/tool/{repo}-{arch}-{vendor}-{os}.zip", "--dir", dir,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(client.downloads, []string{assetName}) {
+		t.Fatalf("downloads = %v", client.downloads)
+	}
+}
+
 func TestSelectAssetsForTag(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -166,7 +186,7 @@ func TestSelectAssetsForTag(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := selectAssetsForTag(test.names, test.pattern, test.tag, test.mode)
+			got, err := selectAssets(test.names, test.pattern, placeholderValues{tag: test.tag}, test.mode)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -174,6 +194,82 @@ func TestSelectAssetsForTag(t *testing.T) {
 				t.Fatalf("selectAssetsForTag() = %v, want %v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestSelectAssetsWithPlatformPlaceholders(t *testing.T) {
+	tests := []struct {
+		name    string
+		names   []string
+		pattern string
+		values  placeholderValues
+		mode    matcher.Mode
+		want    []string
+	}{
+		{
+			name:    "darwin amd64 aliases and vendor",
+			names:   []string{"uv-x86_64-apple-darwin.tar.gz", "uv-amd64-apple-macos.tar.gz", "uv-aarch64-apple-darwin.tar.gz"},
+			pattern: "uv-{arch}-{vendor}-{os}.tar.gz",
+			values:  placeholderValues{goos: "darwin", goarch: "amd64"},
+			want:    []string{"uv-x86_64-apple-darwin.tar.gz", "uv-amd64-apple-macos.tar.gz"},
+		},
+		{
+			name:    "darwin os aliases",
+			names:   []string{"tool-arm64-mac.zip", "tool-aarch64-osx.zip", "tool-arm64-linux.zip"},
+			pattern: "tool-{arch}-{os}.zip",
+			values:  placeholderValues{goos: "darwin", goarch: "arm64"},
+			want:    []string{"tool-arm64-mac.zip", "tool-aarch64-osx.zip"},
+		},
+		{
+			name:    "windows aliases and vendor",
+			names:   []string{"tool_x86_64_pc_win.zip", "tool_amd64_pc_windows.zip", "tool_amd64_unknown_linux.zip"},
+			pattern: "tool_{arch}_{vendor}_{os}.zip",
+			values:  placeholderValues{goos: "windows", goarch: "amd64"},
+			want:    []string{"tool_x86_64_pc_win.zip", "tool_amd64_pc_windows.zip"},
+		},
+		{
+			name:    "linux vendor",
+			names:   []string{"tool-aarch64-unknown-linux.tar.gz", "tool-arm64-pc-linux.tar.gz"},
+			pattern: "tool-{arch}-{vendor}-{os}.tar.gz",
+			values:  placeholderValues{goos: "linux", goarch: "arm64"},
+			want:    []string{"tool-aarch64-unknown-linux.tar.gz"},
+		},
+		{
+			name:    "repository name",
+			names:   []string{"my.tool-linux.zip", "myXtool-linux.zip"},
+			pattern: `^{repo}-{os}\.zip$`,
+			values:  placeholderValues{repo: "my.tool", goos: "linux", goarch: "amd64"},
+			mode:    matcher.Regex,
+			want:    []string{"my.tool-linux.zip"},
+		},
+		{
+			name:    "regex pattern edges",
+			names:   []string{"linux-amd64", "darwin-amd64"},
+			pattern: `^{os}-{arch}$`,
+			values:  placeholderValues{goos: "linux", goarch: "amd64"},
+			mode:    matcher.Regex,
+			want:    []string{"linux-amd64"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := selectAssets(test.names, test.pattern, test.values, test.mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("selectAssets() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestPlatformPlaceholdersRequireDelimiters(t *testing.T) {
+	for _, pattern := range []string{"tool{arch}-{os}.zip", "tool-{arch}suffix-{os}.zip", "tool-{arch}-on{os}.zip"} {
+		_, err := selectAssets(nil, pattern, placeholderValues{goos: "linux", goarch: "amd64"}, matcher.Exact)
+		if err == nil {
+			t.Errorf("selectAssets(%q) succeeded, want delimiter error", pattern)
+		}
 	}
 }
 

@@ -30,7 +30,7 @@ const usage = `Usage:
   ghget OWNER/REPO[@TAG] --list
   ghget OWNER/REPO --tag
 
-TAG defaults to "latest". Use {tag} in FILE_PATTERN to insert the resolved tag.
+TAG defaults to "latest". FILE_PATTERN supports {tag}, {repo}, {arch}, {os}, and {vendor}.
 
 Options:
   -l, --list                 list release assets
@@ -153,7 +153,12 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		names[i] = asset.Name
 		byName[asset.Name] = asset
 	}
-	selectedNames, err := selectAssetsForTag(names, pattern, tag, opts.mode)
+	selectedNames, err := selectAssets(names, pattern, placeholderValues{
+		tag:    tag,
+		repo:   repo,
+		goos:   runtime.GOOS,
+		goarch: runtime.GOARCH,
+	}, opts.mode)
 	if err != nil {
 		return err
 	}
@@ -202,20 +207,41 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	return nil
 }
 
-func selectAssetsForTag(names []string, pattern, tag string, mode matcher.Mode) ([]string, error) {
-	if !strings.Contains(pattern, "{tag}") {
-		return matcher.Select(names, pattern, mode)
-	}
-	for _, variant := range tagorder.Variants(tag) {
-		replacement := variant
-		switch mode {
-		case matcher.Glob:
-			replacement = escapeGlob(replacement)
-		case matcher.Regex:
-			replacement = regexp.QuoteMeta(replacement)
+type placeholderValues struct {
+	tag    string
+	repo   string
+	goos   string
+	goarch string
+}
+
+type placeholderReplacement struct {
+	placeholder string
+	values      []string
+}
+
+func selectAssets(names []string, pattern string, values placeholderValues, mode matcher.Mode) ([]string, error) {
+	for _, placeholder := range []string{"{arch}", "{os}", "{vendor}"} {
+		if err := validatePlatformPlaceholder(pattern, placeholder, mode); err != nil {
+			return nil, err
 		}
-		expanded := strings.ReplaceAll(pattern, "{tag}", replacement)
-		selected, err := matcher.Select(names, expanded, mode)
+	}
+
+	tagVariants := []string{values.tag}
+	if strings.Contains(pattern, "{tag}") {
+		tagVariants = tagorder.Variants(values.tag)
+	}
+	for _, tag := range tagVariants {
+		patterns := []string{pattern}
+		for _, replacement := range []placeholderReplacement{
+			{placeholder: "{tag}", values: []string{tag}},
+			{placeholder: "{repo}", values: []string{values.repo}},
+			{placeholder: "{arch}", values: architectureVariants(values.goarch)},
+			{placeholder: "{os}", values: operatingSystemVariants(values.goos)},
+			{placeholder: "{vendor}", values: vendorVariants(values.goos)},
+		} {
+			patterns = expandPlaceholder(patterns, replacement, mode)
+		}
+		selected, err := selectMatchingAny(names, patterns, mode)
 		if err != nil {
 			return nil, err
 		}
@@ -224,6 +250,101 @@ func selectAssetsForTag(names []string, pattern, tag string, mode matcher.Mode) 
 		}
 	}
 	return nil, nil
+}
+
+func validatePlatformPlaceholder(pattern, placeholder string, mode matcher.Mode) error {
+	for offset := 0; ; {
+		index := strings.Index(pattern[offset:], placeholder)
+		if index < 0 {
+			return nil
+		}
+		index += offset
+		after := index + len(placeholder)
+		leftDelimited := index == 0 || pattern[index-1] == '-' || pattern[index-1] == '_' || mode == matcher.Regex && pattern[index-1] == '^'
+		rightDelimited := after == len(pattern) || pattern[after] == '-' || pattern[after] == '_' || pattern[after] == '.' || strings.HasPrefix(pattern[after:], `\.`) || mode == matcher.Regex && pattern[after] == '$'
+		if !leftDelimited || !rightDelimited {
+			return fmt.Errorf("%s must be delimited by '-' or '_' in the asset pattern", placeholder)
+		}
+		offset = after
+	}
+}
+
+func architectureVariants(goarch string) []string {
+	switch goarch {
+	case "amd64":
+		return []string{"amd64", "x86_64"}
+	case "arm64":
+		return []string{"arm64", "aarch64"}
+	default:
+		return []string{goarch}
+	}
+}
+
+func operatingSystemVariants(goos string) []string {
+	switch goos {
+	case "darwin":
+		return []string{"darwin", "macos", "mac", "osx"}
+	case "windows":
+		return []string{"windows", "win"}
+	default:
+		return []string{goos}
+	}
+}
+
+func vendorVariants(goos string) []string {
+	switch goos {
+	case "darwin":
+		return []string{"apple"}
+	case "windows":
+		return []string{"pc"}
+	default:
+		return []string{"unknown"}
+	}
+}
+
+func expandPlaceholder(patterns []string, replacement placeholderReplacement, mode matcher.Mode) []string {
+	expanded := make([]string, 0, len(patterns)*len(replacement.values))
+	for _, pattern := range patterns {
+		if !strings.Contains(pattern, replacement.placeholder) {
+			expanded = append(expanded, pattern)
+			continue
+		}
+		for _, value := range replacement.values {
+			expanded = append(expanded, strings.ReplaceAll(pattern, replacement.placeholder, escapePlaceholder(value, mode)))
+		}
+	}
+	return expanded
+}
+
+func escapePlaceholder(value string, mode matcher.Mode) string {
+	switch mode {
+	case matcher.Glob:
+		return escapeGlob(value)
+	case matcher.Regex:
+		return regexp.QuoteMeta(value)
+	default:
+		return value
+	}
+}
+
+func selectMatchingAny(names, patterns []string, mode matcher.Mode) ([]string, error) {
+	matched := make(map[string]bool, len(names))
+	for _, pattern := range patterns {
+		selected, err := matcher.Select(names, pattern, mode)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range selected {
+			matched[name] = true
+		}
+	}
+	selected := make([]string, 0, len(matched))
+	for _, name := range names {
+		if matched[name] {
+			selected = append(selected, name)
+		}
+	}
+	return selected, nil
 }
 
 func escapeGlob(value string) string {
