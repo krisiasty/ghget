@@ -6,7 +6,11 @@ builds:
   - id: binaries
     binary: ghget
     ldflags:
-      - -s -w
+      - >-
+        -s -w
+        -X github.com/krisiasty/ghget/internal/buildinfo.version={{ .Version }}
+        -X github.com/krisiasty/ghget/internal/buildinfo.commit={{ .Commit }}
+        -X github.com/krisiasty/ghget/internal/buildinfo.built={{ .Date }}
     env:
       - CGO_ENABLED=0
     goos:
@@ -16,11 +20,6 @@ builds:
     goarch:
       - amd64
       - arm64
-
-upx:
-  - enabled: true
-    compress: best
-    lzma: true
 
 # The binary format publishes executables directly without archive containers.
 archives:
