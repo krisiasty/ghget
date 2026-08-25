@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,12 +58,12 @@ func parseOptions(args []string) (options, error) {
 			opts.listTags = true
 		case "-g", "--glob":
 			if modeSet {
-				return opts, fmt.Errorf("--glob and --regex are mutually exclusive")
+				return opts, errors.New("--glob and --regex are mutually exclusive")
 			}
 			opts.mode, modeSet = matcher.Glob, true
 		case "-r", "--regex":
 			if modeSet {
-				return opts, fmt.Errorf("--glob and --regex are mutually exclusive")
+				return opts, errors.New("--glob and --regex are mutually exclusive")
 			}
 			opts.mode, modeSet = matcher.Regex, true
 		case "-e", "--extract":
@@ -111,7 +112,7 @@ func parseOptions(args []string) (options, error) {
 		}
 	}
 	if len(positional) > 1 {
-		return opts, fmt.Errorf("expected one OWNER/REPO[/FILE][@TAG] argument")
+		return opts, errors.New("expected one OWNER/REPO[/FILE][@TAG] argument")
 	}
 	if len(positional) == 1 {
 		opts.target = positional[0]
@@ -120,19 +121,19 @@ func parseOptions(args []string) (options, error) {
 		return opts, nil
 	}
 	if opts.target == "" {
-		return opts, fmt.Errorf("missing OWNER/REPO[/FILE][@TAG] argument")
+		return opts, errors.New("missing OWNER/REPO[/FILE][@TAG] argument")
 	}
 	if opts.listAssets && opts.listTags {
-		return opts, fmt.Errorf("--list and --tag are mutually exclusive")
+		return opts, errors.New("--list and --tag are mutually exclusive")
 	}
 	if opts.output != "" && opts.extract {
-		return opts, fmt.Errorf("--output cannot be used with --extract")
+		return opts, errors.New("--output cannot be used with --extract")
 	}
 	if opts.keep && !opts.extract {
-		return opts, fmt.Errorf("--keep requires --extract")
+		return opts, errors.New("--keep requires --extract")
 	}
 	if opts.flat && !opts.extract {
-		return opts, fmt.Errorf("--flat requires --extract")
+		return opts, errors.New("--flat requires --extract")
 	}
 	return opts, nil
 }

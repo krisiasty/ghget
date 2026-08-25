@@ -1,0 +1,48 @@
+version: 2
+
+project_name: ghget
+
+builds:
+  - id: binaries
+    binary: ghget
+    ldflags:
+      - -s -w
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+upx:
+  - enabled: true
+    compress: best
+    lzma: true
+
+# The binary format publishes executables directly without archive containers.
+archives:
+  - id: raw-binaries
+    ids:
+      - binaries
+    formats:
+      - binary
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  abbrev: 8
+  format: "- [{{ .SHA }}](https://github.com/krisiasty/ghget/commit/{{ .SHA }}) {{ .Message }}"
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  prerelease: "{{ .IsV0 }}"

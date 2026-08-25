@@ -150,15 +150,15 @@ func safeLocation(location string) string {
 }
 
 func safeURL(u *url.URL) string {
-	copy := *u
-	query := copy.Query()
+	redacted := *u
+	query := redacted.Query()
 	for key := range query {
 		lower := strings.ToLower(key)
 		if strings.Contains(lower, "token") || strings.Contains(lower, "signature") || lower == "sig" || lower == "jwt" {
 			query.Set(key, "REDACTED")
 		}
 	}
-	copy.RawQuery = query.Encode()
-	copy.User = nil
-	return copy.String()
+	redacted.RawQuery = query.Encode()
+	redacted.User = nil
+	return redacted.String()
 }

@@ -67,7 +67,7 @@ func TestRunCreatesMissingDestinationDirectory(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(destination, "tool"))
+	got, err := os.ReadFile(filepath.Join(destination, "tool")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "binary" {
 		t.Fatalf("downloaded content = %q, err = %v", got, err)
 	}

@@ -1,22 +1,29 @@
+// Package matcher selects release asset names using exact, glob, or regex patterns.
 package matcher
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"regexp"
 )
 
+// Mode identifies how an asset pattern is interpreted.
 type Mode int
 
 const (
+	// Exact requires the complete asset name to equal the pattern.
 	Exact Mode = iota
+	// Glob interprets the pattern using path.Match syntax.
 	Glob
+	// Regex interprets the pattern as a Go regular expression.
 	Regex
 )
 
+// Select returns names matching pattern in their original order.
 func Select(names []string, pattern string, mode Mode) ([]string, error) {
 	if pattern == "" {
-		return nil, fmt.Errorf("file pattern is empty")
+		return nil, errors.New("file pattern is empty")
 	}
 	var matches func(string) (bool, error)
 	switch mode {
@@ -34,7 +41,7 @@ func Select(names []string, pattern string, mode Mode) ([]string, error) {
 		}
 		matches = func(name string) (bool, error) { return re.MatchString(name), nil }
 	default:
-		return nil, fmt.Errorf("unknown matching mode")
+		return nil, errors.New("unknown matching mode")
 	}
 
 	selected := make([]string, 0)

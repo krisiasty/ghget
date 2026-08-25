@@ -1,3 +1,4 @@
+// Package tagorder sorts release tags and provides semantic-version variants.
 package tagorder
 
 import (

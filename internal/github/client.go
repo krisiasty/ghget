@@ -1,8 +1,10 @@
+// Package github discovers and downloads releases through public GitHub endpoints.
 package github
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -20,12 +22,14 @@ const defaultBaseURL = "https://github.com"
 var anchorRE = regexp.MustCompile(`(?is)<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>`)
 var generatedDigestRE = regexp.MustCompile(`(?i)\bvalue\s*=\s*["']sha256:([a-f0-9]{64})["']`)
 
+// Asset describes a downloadable release artifact and its optional GitHub digest.
 type Asset struct {
 	Name   string
 	URL    string
 	Digest string
 }
 
+// Client discovers and downloads releases through GitHub's public web endpoints.
 type Client struct {
 	baseURL         string
 	http            *http.Client
@@ -33,10 +37,12 @@ type Client struct {
 	nextOperationID atomic.Uint64
 }
 
+// NewClient constructs a Client for github.com.
 func NewClient(httpClient *http.Client) *Client {
 	return NewClientWithBaseURL(httpClient, defaultBaseURL)
 }
 
+// NewClientWithBaseURL constructs a Client for a custom GitHub-compatible base URL.
 func NewClientWithBaseURL(httpClient *http.Client, baseURL string) *Client {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
@@ -51,10 +57,12 @@ func NewClientWithBaseURL(httpClient *http.Client, baseURL string) *Client {
 	return &Client{baseURL: strings.TrimRight(baseURL, "/"), http: &clientCopy, logging: logging}
 }
 
+// SetLogger enables transport telemetry through logger.
 func (c *Client) SetLogger(logger *slog.Logger) {
 	c.logging.SetLogger(logger)
 }
 
+// ResolveLatest resolves a repository's latest release redirect to its tag.
 func (c *Client) ResolveLatest(ctx context.Context, owner, repo string) (string, error) {
 	endpoint := c.repoURL(owner, repo, "releases", "latest")
 	client := *c.http
@@ -84,6 +92,7 @@ func (c *Client) ResolveLatest(ctx context.Context, owner, repo string) (string,
 	return tag, nil
 }
 
+// ListAssets returns the downloadable assets published for tag.
 func (c *Client) ListAssets(ctx context.Context, owner, repo, tag string) ([]Asset, error) {
 	endpoint := c.repoURL(owner, repo, "releases", "expanded_assets", tag)
 	body, err := c.get(ctx, endpoint)
@@ -124,6 +133,7 @@ func (c *Client) ListAssets(ctx context.Context, owner, repo, tag string) ([]Ass
 	return assets, nil
 }
 
+// ListTags returns repository release tags using Git refs with an HTML fallback.
 func (c *Client) ListTags(ctx context.Context, owner, repo string) ([]string, error) {
 	tags, gitErr := c.listGitTags(ctx, owner, repo)
 	if gitErr == nil {
@@ -131,7 +141,10 @@ func (c *Client) ListTags(ctx context.Context, owner, repo string) ([]string, er
 	}
 	tags, htmlErr := c.listReleaseTags(ctx, owner, repo)
 	if htmlErr != nil {
-		return nil, fmt.Errorf("list tags using Git refs (%v) and release pages (%w)", gitErr, htmlErr)
+		return nil, fmt.Errorf("list tags: %w", errors.Join(
+			fmt.Errorf("git refs: %w", gitErr),
+			fmt.Errorf("release pages: %w", htmlErr),
+		))
 	}
 	return tags, nil
 }
@@ -241,11 +254,12 @@ func parseGitTags(r io.Reader) ([]string, error) {
 		}
 	}
 	if !seenRefs {
-		return nil, fmt.Errorf("git server did not advertise refs")
+		return nil, errors.New("git server did not advertise refs")
 	}
 	return tags, nil
 }
 
+// Download opens a release asset response body and reports its declared size.
 func (c *Client) Download(ctx context.Context, asset Asset) (io.ReadCloser, int64, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, asset.URL, nil)
 	if err != nil {

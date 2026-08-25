@@ -66,7 +66,7 @@ func TestDownloadWithAutomaticChecksum(t *testing.T) {
 	if err := a.Run(context.Background(), []string{"acme/tool/tool-*", "--glob", "--dir", dir, "--executable"}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, "tool-linux"))
+	got, err := os.ReadFile(filepath.Join(dir, "tool-linux")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != content {
 		t.Fatalf("downloaded content = %q, err = %v", got, err)
 	}
@@ -100,7 +100,7 @@ func TestDownloadWithTagPlaceholder(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, assetName))
+	got, err := os.ReadFile(filepath.Join(dir, assetName)) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "archive" {
 		t.Fatalf("downloaded content = %q, err = %v", got, err)
 	}
@@ -211,7 +211,7 @@ func TestAutomaticChecksumsFetchOnlyRelevantSidecars(t *testing.T) {
 		t.Fatalf("downloads = %v", client.downloads)
 	}
 	for name, want := range map[string]string{archiveName: content, sidecarName: sidecar} {
-		got, err := os.ReadFile(filepath.Join(dir, name))
+		got, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // The path is confined to the test's temporary directory.
 		if err != nil || string(got) != want {
 			t.Errorf("%s content = %q, err = %v", name, got, err)
 		}
@@ -324,7 +324,7 @@ func TestForceOverwritesExistingDownload(t *testing.T) {
 	if err := NewWithClient(client, io.Discard, io.Discard).Run(context.Background(), []string{"acme/tool/tool", "--dir", dir, "-f"}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(path)
+	got, err := os.ReadFile(path) //nolint:gosec // path is inside the test's temporary directory.
 	if err != nil || string(got) != "new" {
 		t.Fatalf("overwritten content = %q, err = %v", got, err)
 	}
@@ -359,10 +359,10 @@ func TestExtractKeepsArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.ReadFile(filepath.Join(dir, "tool")); err != nil || string(got) != "executable" {
+	if got, err := os.ReadFile(filepath.Join(dir, "tool")); err != nil || string(got) != "executable" { //nolint:gosec // The path is confined to the test's temporary directory.
 		t.Fatalf("extracted content = %q, err = %v", got, err)
 	}
-	if got, err := os.ReadFile(filepath.Join(dir, "bundle.zip")); err != nil || !bytes.Equal(got, archiveContent.Bytes()) {
+	if got, err := os.ReadFile(filepath.Join(dir, "bundle.zip")); err != nil || !bytes.Equal(got, archiveContent.Bytes()) { //nolint:gosec // The path is confined to the test's temporary directory.
 		t.Fatalf("kept archive differs, err = %v", err)
 	}
 	if !strings.Contains(stderr.String(), "kept archive") {
@@ -396,7 +396,7 @@ func TestExtractKeepsMatchingExistingFile(t *testing.T) {
 	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bin", "tool")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte("same content"), 0o600); err != nil {
@@ -439,7 +439,7 @@ func TestExtractFlat(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, "tool"))
+	got, err := os.ReadFile(filepath.Join(dir, "tool")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "binary" {
 		t.Fatalf("flat content = %q, err = %v", got, err)
 	}

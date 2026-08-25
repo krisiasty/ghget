@@ -1,3 +1,4 @@
+// Package archive safely extracts release archives into local directories.
 package archive
 
 import (
@@ -5,6 +6,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -13,16 +15,19 @@ import (
 	"strings"
 )
 
+// Options controls replacement and path handling during extraction.
 type Options struct {
 	Force bool
 	Flat  bool
 }
 
+// FileResult describes whether an extracted path was written or already matched.
 type FileResult struct {
 	Path    string
 	Written bool
 }
 
+// Extract unpacks a supported archive while rejecting unsafe paths and links.
 func Extract(archivePath, destination, assetName string, options Options) ([]FileResult, error) {
 	lower := strings.ToLower(assetName)
 	switch {
@@ -31,7 +36,7 @@ func Extract(archivePath, destination, assetName string, options Options) ([]Fil
 	case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"):
 		return extractTarGzip(archivePath, destination, options)
 	case strings.HasSuffix(lower, ".tar"):
-		f, err := os.Open(archivePath)
+		f, err := os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +86,7 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 		if err != nil {
 			return results, err
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil { //nolint:gosec // Extracted parent directories should follow conventional archive permissions.
 			return results, err
 		}
 		r, err := entry.Open()
@@ -102,7 +107,7 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 }
 
 func extractTarGzip(archivePath, destination string, options Options) ([]FileResult, error) {
-	f, err := os.Open(archivePath)
+	f, err := os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +125,7 @@ func extractTar(r io.Reader, destination string, options Options) ([]FileResult,
 	results := make([]FileResult, 0)
 	for {
 		header, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -130,7 +135,7 @@ func extractTar(r io.Reader, destination string, options Options) ([]FileResult,
 		if err != nil {
 			return results, err
 		}
-		mode := fs.FileMode(header.Mode)
+		mode := fs.FileMode(header.Mode & 0o777)
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if options.Flat {
@@ -148,7 +153,7 @@ func extractTar(r io.Reader, destination string, options Options) ([]FileResult,
 			if err != nil {
 				return results, err
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil { //nolint:gosec // Extracted parent directories should follow conventional archive permissions.
 				return results, err
 			}
 			written, err := writeFile(target, io.LimitReader(tr, header.Size), fileMode(mode), options.Force)
@@ -168,7 +173,7 @@ func extractTar(r io.Reader, destination string, options Options) ([]FileResult,
 }
 
 func extractGzip(archivePath, destination, outputName string, options Options) ([]FileResult, error) {
-	f, err := os.Open(archivePath)
+	f, err := os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +261,7 @@ func writeFile(path string, r io.Reader, mode fs.FileMode, force bool) (bool, er
 		return false, err
 	}
 
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm())
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm()) //nolint:gosec // path is confined to the validated extraction destination.
 	if err != nil {
 		return false, err
 	}
@@ -273,7 +278,7 @@ func writeFile(path string, r io.Reader, mode fs.FileMode, force bool) (bool, er
 }
 
 func contentMatchesFile(path string, content io.Reader) (bool, error) {
-	existing, err := os.Open(path)
+	existing, err := os.Open(path) //nolint:gosec // path is confined to the validated extraction destination.
 	if err != nil {
 		return false, err
 	}
