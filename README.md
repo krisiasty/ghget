@@ -25,9 +25,19 @@ ghget OWNER/REPO --tag
 ```
 
 The tag defaults to `latest`. File matching is exact unless `--glob` or
-`--regex` is selected. Use `{tag}` in the file pattern to insert the resolved
-release tag. For Semantic Version tags, matching automatically tries both the
-leading-`v` and unprefixed spellings.
+`--regex` is selected. Asset patterns support these placeholders:
+
+| Placeholder | Matching value |
+|---|---|
+| `{tag}` | Resolved release tag; Semantic Versions try both with and without a leading `v` |
+| `{repo}` | Repository name |
+| `{arch}` | Current architecture: `amd64`/`x86_64` or `arm64`/`aarch64` |
+| `{os}` | Current OS: `linux`, `windows`/`win`, or `darwin`/`macos`/`mac`/`osx` |
+| `{vendor}` | `unknown` on Linux, `pc` on Windows, or `apple` on macOS |
+
+`{arch}`, `{os}`, and `{vendor}` must be separated from adjacent filename text
+by `-` or `_`. A pattern edge or the dot before a file extension is also a
+valid boundary.
 
 ```sh
 # Download one asset from the latest release.
@@ -38,6 +48,9 @@ ghget owner/project/'project_*_linux_*.tar.gz@v2.0.0' --glob
 
 # Resolve latest, then try both tlsx_v1.3.0_... and tlsx_1.3.0_....
 ghget projectdiscovery/tlsx/'tlsx_{tag}_macOS_amd64.zip'
+
+# Select the release asset for this repository, architecture, vendor, and OS.
+ghget astral-sh/uv/'{repo}-{arch}-{vendor}-{os}.tar.gz'
 
 # Extract a matching archive to ~/.local/bin and make extracted files executable.
 ghget owner/project/'project_linux_amd64.tar.gz' --extract --dir ~/.local/bin --executable
