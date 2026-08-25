@@ -22,6 +22,7 @@ for macOS, Linux, and Windows on AMD64 and ARM64. Windows filenames include the
 ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
 ghget OWNER/REPO[@TAG] --list
 ghget OWNER/REPO --tag
+ghget --version
 ```
 
 The tag defaults to `latest`. File matching is exact unless `--glob` or
@@ -87,6 +88,7 @@ list uses ascending alphabetic order instead.
 | `-k` | `--keep` | Keep the downloaded archive when using `--extract` |
 | | `--flat` | Extract all files directly into the destination directory |
 | | `--debug` | Log structured HTTP telemetry to standard error |
+| | `--version` | Show version, commit, and build timestamp |
 
 Options may appear before or after the target. Existing files are never
 overwritten unless `--force` is supplied.

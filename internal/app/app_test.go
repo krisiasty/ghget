@@ -47,6 +47,16 @@ func (f *fakeClient) Download(_ context.Context, asset gh.Asset) (io.ReadCloser,
 	return io.NopCloser(strings.NewReader(content)), int64(len(content)), nil
 }
 
+func TestVersion(t *testing.T) {
+	var stdout strings.Builder
+	if err := NewWithClient(nil, &stdout, io.Discard).Run(context.Background(), []string{"--version"}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "ghget dev (commit unknown, built unknown)\n"; stdout.String() != want {
+		t.Fatalf("output = %q, want %q", stdout.String(), want)
+	}
+}
+
 func TestDownloadWithAutomaticChecksum(t *testing.T) {
 	content := "binary data"
 	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(content)))

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/krisiasty/ghget/internal/archive"
+	"github.com/krisiasty/ghget/internal/buildinfo"
 	"github.com/krisiasty/ghget/internal/checksum"
 	gh "github.com/krisiasty/ghget/internal/github"
 	"github.com/krisiasty/ghget/internal/matcher"
@@ -29,6 +30,7 @@ const usage = `Usage:
   ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
   ghget OWNER/REPO[@TAG] --list
   ghget OWNER/REPO --tag
+  ghget --version
 
 TAG defaults to "latest". FILE_PATTERN supports {tag}, {repo}, {arch}, {os}, and {vendor}.
 
@@ -42,11 +44,12 @@ Options:
   -e, --extract              extract ZIP, TAR, TAR.GZ/TGZ, or GZIP assets
   -c, --checksum VALUE       checksum digest or checksum-file path
   -x, --executable           make downloaded or extracted files executable
-  -u, --unquarantine        remove macOS quarantine attributes using sudo
+  -u, --unquarantine         remove macOS quarantine attributes using sudo
   -f, --force                overwrite existing files
   -k, --keep                 keep the downloaded archive after extraction
       --flat                 extract all files directly into the destination directory
       --debug                log HTTP telemetry to stderr
+      --version              show version and build information
   -h, --help                 show this help
 `
 
@@ -89,6 +92,10 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	}
 	if opts.help {
 		_, err := io.WriteString(a.stdout, usage)
+		return err
+	}
+	if opts.version {
+		_, err := fmt.Fprintln(a.stdout, buildinfo.String())
 		return err
 	}
 	if opts.debug {

@@ -26,6 +26,7 @@ type options struct {
 	flat         bool
 	debug        bool
 	help         bool
+	version      bool
 }
 
 func parseOptions(args []string) (options, error) {
@@ -52,6 +53,8 @@ func parseOptions(args []string) (options, error) {
 		switch name {
 		case "-h", "--help":
 			opts.help = true
+		case "--version":
+			opts.version = true
 		case "-l", "--list":
 			opts.listAssets = true
 		case "-t", "--tag", "--tags":
@@ -117,7 +120,7 @@ func parseOptions(args []string) (options, error) {
 	if len(positional) == 1 {
 		opts.target = positional[0]
 	}
-	if opts.help {
+	if opts.help || opts.version {
 		return opts, nil
 	}
 	if opts.target == "" {
