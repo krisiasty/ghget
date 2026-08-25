@@ -6,6 +6,12 @@ published checksums, and safely extract common archive formats.
 
 ## Install
 
+Homebrew on macOS:
+
+```sh
+brew install --cask krisiasty/tap/ghget
+```
+
 Go 1.27 or newer is required to build from source:
 
 ```sh
@@ -13,8 +19,9 @@ go install github.com/krisiasty/ghget@latest
 ```
 
 Tagged releases use GoReleaser to publish raw `ghget_VERSION_OS_ARCH` binaries
-for macOS, Linux, and Windows on AMD64 and ARM64. Windows filenames include the
-`.exe` extension. Package-manager formulas are not published yet.
+for macOS, Linux, and Windows on AMD64 and ARM64. macOS releases also include
+`.tar.gz` archives used by the Homebrew cask. Windows filenames include the
+`.exe` extension.
 
 ## Usage
 
