@@ -139,6 +139,24 @@ func TestDownloadWithRuntimePlaceholders(t *testing.T) {
 	}
 }
 
+func TestDownloadWithRepositoryPlaceholders(t *testing.T) {
+	assetName := "projectdiscovery-naabu.zip"
+	client := &fakeClient{
+		tag:     "v1.0.0",
+		assets:  []gh.Asset{{Name: assetName}},
+		content: map[string]string{assetName: "archive"},
+	}
+	dir := t.TempDir()
+	if err := NewWithClient(client, io.Discard, io.Discard).Run(context.Background(), []string{
+		"projectdiscovery/naabu/{owner}-{project}.zip", "--dir", dir,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(client.downloads, []string{assetName}) {
+		t.Fatalf("downloads = %v", client.downloads)
+	}
+}
+
 func TestSelectAssetsForTag(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -225,10 +243,10 @@ func TestSelectAssetsWithPlatformPlaceholders(t *testing.T) {
 		},
 		{
 			name:    "darwin os aliases",
-			names:   []string{"tool-arm64-mac.zip", "tool-aarch64-osx.zip", "tool-arm64-linux.zip"},
+			names:   []string{"tool-arm64-mac.zip", "tool-aarch64-osx.zip", "tool-arm64-macOS.zip", "tool-arm64-linux.zip"},
 			pattern: "tool-{arch}-{os}.zip",
 			values:  placeholderValues{goos: "darwin", goarch: "arm64"},
-			want:    []string{"tool-arm64-mac.zip", "tool-aarch64-osx.zip"},
+			want:    []string{"tool-arm64-mac.zip", "tool-aarch64-osx.zip", "tool-arm64-macOS.zip"},
 		},
 		{
 			name:    "windows aliases and vendor",
@@ -251,6 +269,19 @@ func TestSelectAssetsWithPlatformPlaceholders(t *testing.T) {
 			values:  placeholderValues{repo: "my.tool", goos: "linux", goarch: "amd64"},
 			mode:    matcher.Regex,
 			want:    []string{"my.tool-linux.zip"},
+		},
+		{
+			name: "owner and project",
+			names: []string{
+				"naabu_2.6.1_macOS_amd64.zip",
+				"naabu_2.6.1notmacOS_amd64.zip",
+			},
+			pattern: "{project}*{tag}*{os}_{arch}.zip",
+			values: placeholderValues{
+				tag: "v2.6.1", owner: "projectdiscovery", repo: "naabu", goos: "darwin", goarch: "amd64",
+			},
+			mode: matcher.Glob,
+			want: []string{"naabu_2.6.1_macOS_amd64.zip"},
 		},
 		{
 			name:    "regex pattern edges",

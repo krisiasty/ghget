@@ -31,14 +31,17 @@ The tag defaults to `latest`. File matching is exact unless `--glob` or
 | Placeholder | Matching value |
 |---|---|
 | `{tag}` | Resolved release tag; Semantic Versions try both with and without a leading `v` |
-| `{repo}` | Repository name |
+| `{owner}` | Repository owner: the first component of `OWNER/REPO` |
+| `{project}` | Repository name: the second component of `OWNER/REPO` |
+| `{repo}` | Repository name; equivalent to `{project}` |
 | `{arch}` | Current architecture: `amd64`/`x86_64` or `arm64`/`aarch64` |
-| `{os}` | Current OS: `linux`, `windows`/`win`, or `darwin`/`macos`/`mac`/`osx` |
+| `{os}` | Current OS: `linux`, `windows`/`win`, or `darwin`/`macos`/`macOS`/`mac`/`osx` |
 | `{vendor}` | `unknown` on Linux, `pc` on Windows, or `apple` on macOS |
 
 `{arch}`, `{os}`, and `{vendor}` must be separated from adjacent filename text
 by `-` or `_`. A pattern edge or the dot before a file extension is also a
-valid boundary.
+valid boundary. In glob mode, an adjacent `*` may consume the separator; the
+matched asset must still contain a real `-` or `_` boundary.
 
 ```sh
 # Download one asset from the latest release.
@@ -52,6 +55,9 @@ ghget projectdiscovery/tlsx/'tlsx_{tag}_macOS_amd64.zip'
 
 # Select the release asset for this repository, architecture, vendor, and OS.
 ghget astral-sh/uv/'{repo}-{arch}-{vendor}-{os}.tar.gz'
+
+# Insert the project name and select the current release and platform.
+ghget projectdiscovery/naabu/'{project}*{tag}*{os}_{arch}.zip' --glob
 
 # Extract a matching archive to ~/.local/bin and make extracted files executable.
 ghget owner/project/'project_linux_amd64.tar.gz' --extract --dir ~/.local/bin --executable
