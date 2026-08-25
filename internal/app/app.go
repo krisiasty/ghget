@@ -32,7 +32,8 @@ const usage = `Usage:
   ghget OWNER/REPO --tag
   ghget --version
 
-TAG defaults to "latest". FILE_PATTERN supports {tag}, {repo}, {arch}, {os}, and {vendor}.
+TAG defaults to "latest". FILE_PATTERN supports {tag}, {owner}, {project}, {repo},
+{arch}, {os}, and {vendor}.
 
 Options:
   -l, --list                 list release assets
@@ -162,6 +163,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	}
 	selectedNames, err := selectAssets(names, pattern, placeholderValues{
 		tag:    tag,
+		owner:  owner,
 		repo:   repo,
 		goos:   runtime.GOOS,
 		goarch: runtime.GOARCH,
@@ -216,6 +218,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 
 type placeholderValues struct {
 	tag    string
+	owner  string
 	repo   string
 	goos   string
 	goarch string
@@ -241,6 +244,8 @@ func selectAssets(names []string, pattern string, values placeholderValues, mode
 		patterns := []string{pattern}
 		for _, replacement := range []placeholderReplacement{
 			{placeholder: "{tag}", values: []string{tag}},
+			{placeholder: "{owner}", values: []string{values.owner}},
+			{placeholder: "{project}", values: []string{values.repo}},
 			{placeholder: "{repo}", values: []string{values.repo}},
 			{placeholder: "{arch}", values: architectureVariants(values.goarch)},
 			{placeholder: "{os}", values: operatingSystemVariants(values.goos)},
@@ -252,6 +257,7 @@ func selectAssets(names []string, pattern string, values placeholderValues, mode
 		if err != nil {
 			return nil, err
 		}
+		selected = filterPlatformBoundaries(selected, pattern, values)
 		if len(selected) > 0 {
 			return selected, nil
 		}
@@ -267,13 +273,55 @@ func validatePlatformPlaceholder(pattern, placeholder string, mode matcher.Mode)
 		}
 		index += offset
 		after := index + len(placeholder)
-		leftDelimited := index == 0 || pattern[index-1] == '-' || pattern[index-1] == '_' || mode == matcher.Regex && pattern[index-1] == '^'
-		rightDelimited := after == len(pattern) || pattern[after] == '-' || pattern[after] == '_' || pattern[after] == '.' || strings.HasPrefix(pattern[after:], `\.`) || mode == matcher.Regex && pattern[after] == '$'
+		leftDelimited := index == 0 || pattern[index-1] == '-' || pattern[index-1] == '_' || mode == matcher.Regex && pattern[index-1] == '^' || mode == matcher.Glob && pattern[index-1] == '*'
+		rightDelimited := after == len(pattern) || pattern[after] == '-' || pattern[after] == '_' || pattern[after] == '.' || strings.HasPrefix(pattern[after:], `\.`) || mode == matcher.Regex && pattern[after] == '$' || mode == matcher.Glob && pattern[after] == '*'
 		if !leftDelimited || !rightDelimited {
 			return fmt.Errorf("%s must be delimited by '-' or '_' in the asset pattern", placeholder)
 		}
 		offset = after
 	}
+}
+
+func filterPlatformBoundaries(names []string, pattern string, values placeholderValues) []string {
+	requirements := []placeholderReplacement{
+		{placeholder: "{arch}", values: architectureVariants(values.goarch)},
+		{placeholder: "{os}", values: operatingSystemVariants(values.goos)},
+		{placeholder: "{vendor}", values: vendorVariants(values.goos)},
+	}
+	filtered := make([]string, 0, len(names))
+	for _, name := range names {
+		valid := true
+		for _, requirement := range requirements {
+			if strings.Contains(pattern, requirement.placeholder) && !containsDelimitedVariant(name, requirement.values) {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			filtered = append(filtered, name)
+		}
+	}
+	return filtered
+}
+
+func containsDelimitedVariant(name string, variants []string) bool {
+	for _, variant := range variants {
+		for offset := 0; ; {
+			index := strings.Index(name[offset:], variant)
+			if index < 0 {
+				break
+			}
+			index += offset
+			after := index + len(variant)
+			leftDelimited := index == 0 || name[index-1] == '-' || name[index-1] == '_'
+			rightDelimited := after == len(name) || name[after] == '-' || name[after] == '_' || name[after] == '.'
+			if leftDelimited && rightDelimited {
+				return true
+			}
+			offset = index + 1
+		}
+	}
+	return false
 }
 
 func architectureVariants(goarch string) []string {
@@ -290,7 +338,7 @@ func architectureVariants(goarch string) []string {
 func operatingSystemVariants(goos string) []string {
 	switch goos {
 	case "darwin":
-		return []string{"darwin", "macos", "mac", "osx"}
+		return []string{"darwin", "macos", "macOS", "mac", "osx"}
 	case "windows":
 		return []string{"windows", "win"}
 	default:
