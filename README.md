@@ -29,7 +29,7 @@ The tag defaults to `latest`. File matching is exact unless `--glob` or
 `--regex` is selected. Asset patterns support these placeholders:
 
 | Placeholder | Matching value |
-|---|---|
+| --- | --- |
 | `{tag}` | Resolved release tag; Semantic Versions try both with and without a leading `v` |
 | `{owner}` | Repository owner: the first component of `OWNER/REPO` |
 | `{project}` | Repository name: the second component of `OWNER/REPO` |
@@ -79,7 +79,7 @@ list uses ascending alphabetic order instead.
 ### Options
 
 | Short | Long | Description |
-|---|---|---|
+| --- | --- | --- |
 | `-l` | `--list` | List assets for a release |
 | `-t` | `--tag`, `--tags` | List release tags |
 | `-g` | `--glob` | Treat the file pattern as a glob |
