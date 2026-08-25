@@ -6,6 +6,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -55,6 +57,11 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 		return nil, fmt.Errorf("open ZIP archive: %w", err)
 	}
 	defer func() { _ = zr.Close() }()
+	root, rootPath, err := openDestinationRoot(destination)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
 
 	results := make([]FileResult, 0)
 	for _, entry := range zr.File {
@@ -70,11 +77,10 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 			if options.Flat {
 				continue
 			}
-			target, err := targetPath(destination, clean, false)
-			if err != nil {
+			if err := rejectSymlinkComponents(root, clean); err != nil {
 				return results, err
 			}
-			if err := os.MkdirAll(target, directoryMode(mode)); err != nil {
+			if err := root.MkdirAll(clean, directoryMode(mode)); err != nil {
 				return results, err
 			}
 			continue
@@ -82,18 +88,18 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 		if !mode.IsRegular() {
 			return results, fmt.Errorf("unsupported ZIP entry type %q", entry.Name)
 		}
-		target, err := targetPath(destination, clean, options.Flat)
-		if err != nil {
+		target := archiveTarget(clean, options.Flat)
+		if err := rejectSymlinkComponents(root, target); err != nil {
 			return results, err
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil { //nolint:gosec // Extracted parent directories should follow conventional archive permissions.
+		if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return results, err
 		}
 		r, err := entry.Open()
 		if err != nil {
 			return results, err
 		}
-		written, err := writeFile(target, r, fileMode(mode), options.Force)
+		written, err := writeFile(root, target, r, fileMode(mode), options.Force)
 		if err != nil {
 			_ = r.Close()
 			return results, err
@@ -101,7 +107,7 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 		if err := r.Close(); err != nil {
 			return results, err
 		}
-		results = append(results, FileResult{Path: target, Written: written})
+		results = append(results, FileResult{Path: filepath.Join(rootPath, target), Written: written})
 	}
 	return results, nil
 }
@@ -121,6 +127,12 @@ func extractTarGzip(archivePath, destination string, options Options) ([]FileRes
 }
 
 func extractTar(r io.Reader, destination string, options Options) ([]FileResult, error) {
+	root, rootPath, err := openDestinationRoot(destination)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+
 	tr := tar.NewReader(r)
 	results := make([]FileResult, 0)
 	for {
@@ -141,26 +153,25 @@ func extractTar(r io.Reader, destination string, options Options) ([]FileResult,
 			if options.Flat {
 				continue
 			}
-			target, err := targetPath(destination, clean, false)
-			if err != nil {
+			if err := rejectSymlinkComponents(root, clean); err != nil {
 				return results, err
 			}
-			if err := os.MkdirAll(target, directoryMode(mode)); err != nil {
+			if err := root.MkdirAll(clean, directoryMode(mode)); err != nil {
 				return results, err
 			}
 		case tar.TypeReg, tar.TypeRegA: //nolint:staticcheck // NUL is still emitted by legacy TAR writers.
-			target, err := targetPath(destination, clean, options.Flat)
+			target := archiveTarget(clean, options.Flat)
+			if err := rejectSymlinkComponents(root, target); err != nil {
+				return results, err
+			}
+			if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return results, err
+			}
+			written, err := writeFile(root, target, io.LimitReader(tr, header.Size), fileMode(mode), options.Force)
 			if err != nil {
 				return results, err
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil { //nolint:gosec // Extracted parent directories should follow conventional archive permissions.
-				return results, err
-			}
-			written, err := writeFile(target, io.LimitReader(tr, header.Size), fileMode(mode), options.Force)
-			if err != nil {
-				return results, err
-			}
-			results = append(results, FileResult{Path: target, Written: written})
+			results = append(results, FileResult{Path: filepath.Join(rootPath, target), Written: written})
 		case tar.TypeXGlobalHeader:
 			continue
 		case tar.TypeSymlink, tar.TypeLink:
@@ -190,65 +201,81 @@ func extractGzip(archivePath, destination, outputName string, options Options) (
 	if err != nil {
 		return nil, err
 	}
-	target, err := targetPath(destination, clean, options.Flat)
+	root, rootPath, err := openDestinationRoot(destination)
 	if err != nil {
 		return nil, err
 	}
-	written, err := writeFile(target, gz, 0o644, options.Force)
+	defer func() { _ = root.Close() }()
+	target := archiveTarget(clean, options.Flat)
+	if err := rejectSymlinkComponents(root, target); err != nil {
+		return nil, err
+	}
+	if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return nil, err
+	}
+	written, err := writeFile(root, target, gz, 0o644, options.Force)
 	if err != nil {
 		return nil, err
 	}
-	return []FileResult{{Path: target, Written: written}}, nil
+	return []FileResult{{Path: filepath.Join(rootPath, target), Written: written}}, nil
 }
 
 func cleanArchivePath(name string) (string, error) {
-	if name == "" || filepath.IsAbs(name) {
-		return "", fmt.Errorf("unsafe archive path %q", name)
-	}
 	clean := filepath.Clean(filepath.FromSlash(name))
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	if clean == "." || !filepath.IsLocal(clean) {
 		return "", fmt.Errorf("unsafe archive path %q", name)
 	}
 	return clean, nil
 }
 
-func targetPath(destination, clean string, flat bool) (string, error) {
+func archiveTarget(clean string, flat bool) string {
 	if flat {
-		clean = filepath.Base(clean)
+		return filepath.Base(clean)
 	}
+	return clean
+}
+
+func openDestinationRoot(destination string) (*os.Root, string, error) {
 	root, err := filepath.Abs(destination)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	target := filepath.Join(root, clean)
-	if target != root && !strings.HasPrefix(target, root+string(filepath.Separator)) {
-		return "", fmt.Errorf("unsafe archive path %q", clean)
+	if err := os.MkdirAll(root, 0o755); err != nil { //nolint:gosec // User-selected extraction directories should use conventional directory permissions.
+		return nil, "", err
 	}
-	for candidate := target; candidate != root; candidate = filepath.Dir(candidate) {
-		info, err := os.Lstat(candidate)
+	destinationRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, "", err
+	}
+	return destinationRoot, root, nil
+}
+
+func rejectSymlinkComponents(root *os.Root, name string) error {
+	for candidate := name; candidate != "."; candidate = filepath.Dir(candidate) {
+		info, err := root.Lstat(candidate)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return "", err
+			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return "", fmt.Errorf("unsafe archive path %q traverses a symbolic link", clean)
+			return fmt.Errorf("unsafe archive path %q traverses a symbolic link", name)
 		}
 	}
-	return target, nil
+	return nil
 }
 
-func writeFile(path string, r io.Reader, mode fs.FileMode, force bool) (bool, error) {
+func writeFile(root *os.Root, path string, r io.Reader, mode fs.FileMode, force bool) (bool, error) {
 	if force {
-		return true, replaceFile(path, r, mode)
+		return true, replaceFile(root, path, r, mode)
 	}
-	info, err := os.Lstat(path)
+	info, err := root.Lstat(path)
 	if err == nil {
 		if !info.Mode().IsRegular() {
 			return false, fmt.Errorf("destination already exists and is not a regular file: %s; use --force to overwrite", path)
 		}
-		matches, err := contentMatchesFile(path, r)
+		matches, err := contentMatchesFile(root, path, r)
 		if err != nil {
 			return false, fmt.Errorf("compare existing file %s: %w", path, err)
 		}
@@ -261,24 +288,24 @@ func writeFile(path string, r io.Reader, mode fs.FileMode, force bool) (bool, er
 		return false, err
 	}
 
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm()) //nolint:gosec // path is confined to the validated extraction destination.
+	f, err := root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm())
 	if err != nil {
 		return false, err
 	}
 	_, copyErr := io.Copy(f, r)
 	closeErr := f.Close()
 	if copyErr != nil {
-		_ = os.Remove(path)
+		_ = root.Remove(path)
 		return false, copyErr
 	}
 	if closeErr != nil {
-		_ = os.Remove(path)
+		_ = root.Remove(path)
 	}
 	return true, closeErr
 }
 
-func contentMatchesFile(path string, content io.Reader) (bool, error) {
-	existing, err := os.Open(path) //nolint:gosec // path is confined to the validated extraction destination.
+func contentMatchesFile(root *os.Root, path string, content io.Reader) (bool, error) {
+	existing, err := root.Open(path)
 	if err != nil {
 		return false, err
 	}
@@ -316,17 +343,12 @@ func contentMatchesFile(path string, content io.Reader) (bool, error) {
 	}
 }
 
-func replaceFile(path string, r io.Reader, mode fs.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".ghget-extract-*")
+func replaceFile(root *os.Root, path string, r io.Reader, mode fs.FileMode) error {
+	tmp, tmpPath, err := createTempFile(root, filepath.Dir(path), mode)
 	if err != nil {
 		return err
 	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-	if err := tmp.Chmod(mode.Perm()); err != nil {
-		_ = tmp.Close()
-		return err
-	}
+	defer func() { _ = root.Remove(tmpPath) }()
 	_, copyErr := io.Copy(tmp, r)
 	closeErr := tmp.Close()
 	if copyErr != nil {
@@ -335,17 +357,40 @@ func replaceFile(path string, r io.Reader, mode fs.FileMode) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	if info, err := os.Lstat(path); err == nil {
+	if info, err := root.Lstat(path); err == nil {
 		if info.IsDir() {
 			return fmt.Errorf("cannot overwrite directory %s", path)
 		}
-		if err := os.Remove(path); err != nil {
+		if err := root.Remove(path); err != nil {
 			return err
 		}
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	return root.Rename(tmpPath, path)
+}
+
+func createTempFile(root *os.Root, directory string, mode fs.FileMode) (*os.File, string, error) {
+	for range 100 {
+		var suffix [8]byte
+		if _, err := rand.Read(suffix[:]); err != nil {
+			return nil, "", err
+		}
+		path := filepath.Join(directory, ".ghget-extract-"+hex.EncodeToString(suffix[:]))
+		f, err := root.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode.Perm())
+		if err == nil {
+			if err := f.Chmod(mode.Perm()); err != nil {
+				_ = f.Close()
+				_ = root.Remove(path)
+				return nil, "", err
+			}
+			return f, path, nil
+		}
+		if !os.IsExist(err) {
+			return nil, "", err
+		}
+	}
+	return nil, "", errors.New("could not create a unique extraction temporary file")
 }
 
 func directoryMode(mode fs.FileMode) fs.FileMode {

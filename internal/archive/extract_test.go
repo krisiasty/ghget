@@ -109,7 +109,8 @@ func TestExtractTarGzip(t *testing.T) {
 }
 
 func TestExtractRejectsTraversal(t *testing.T) {
-	archivePath := filepath.Join(t.TempDir(), "evil.zip")
+	base := t.TempDir()
+	archivePath := filepath.Join(base, "evil.zip")
 	f, err := os.Create(archivePath) //nolint:gosec // archivePath is inside the test's temporary directory.
 	if err != nil {
 		t.Fatal(err)
@@ -129,9 +130,64 @@ func TestExtractRejectsTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, options := range []Options{{}, {Flat: true}} {
-		if _, err := Extract(archivePath, t.TempDir(), "evil.zip", options); err == nil {
+		out := filepath.Join(base, "out")
+		if _, err := Extract(archivePath, out, "evil.zip", options); err == nil {
 			t.Fatalf("path traversal unexpectedly accepted with options %+v", options)
 		}
+		if _, err := os.Stat(filepath.Join(base, "outside")); !os.IsNotExist(err) {
+			t.Fatalf("path traversal created a file outside destination: %v", err)
+		}
+	}
+}
+
+func TestExtractTarRejectsTraversal(t *testing.T) {
+	base := t.TempDir()
+	archivePath := filepath.Join(base, "evil.tar")
+	writeTarArchive(t, archivePath, "../outside", "bad")
+
+	for _, options := range []Options{{}, {Flat: true}} {
+		out := filepath.Join(base, "out")
+		if _, err := Extract(archivePath, out, "evil.tar", options); err == nil {
+			t.Fatalf("path traversal unexpectedly accepted with options %+v", options)
+		}
+		if _, err := os.Stat(filepath.Join(base, "outside")); !os.IsNotExist(err) {
+			t.Fatalf("path traversal created a file outside destination: %v", err)
+		}
+	}
+}
+
+func TestExtractRejectsSymlinkEscape(t *testing.T) {
+	base := t.TempDir()
+	out := filepath.Join(base, "out")
+	outside := filepath.Join(base, "outside")
+	if err := os.MkdirAll(out, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(outside, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(out, "link")); err != nil {
+		t.Skipf("create test symlink: %v", err)
+	}
+
+	for _, test := range []struct {
+		name      string
+		assetName string
+		write     func(*testing.T, string, string, string)
+	}{
+		{name: "ZIP", assetName: "evil.zip", write: writeZIPArchive},
+		{name: "TAR", assetName: "evil.tar", write: writeTarArchive},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			archivePath := filepath.Join(base, test.assetName)
+			test.write(t, archivePath, "link/escaped", "bad")
+			if _, err := Extract(archivePath, out, test.assetName, Options{Force: true}); err == nil {
+				t.Fatal("symlink escape unexpectedly accepted")
+			}
+			if _, err := os.Stat(filepath.Join(outside, "escaped")); !os.IsNotExist(err) {
+				t.Fatalf("symlink escape created a file outside destination: %v", err)
+			}
+		})
 	}
 }
 
@@ -236,10 +292,16 @@ func TestExtractFlatCollision(t *testing.T) {
 }
 
 func TestContentMatchesFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "existing")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "existing")
 	if err := os.WriteFile(path, []byte("content"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
 	for _, test := range []struct {
 		name    string
 		content string
@@ -251,10 +313,53 @@ func TestContentMatchesFile(t *testing.T) {
 		{name: "longer", content: "content-more", want: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := contentMatchesFile(path, strings.NewReader(test.content))
+			got, err := contentMatchesFile(root, "existing", strings.NewReader(test.content))
 			if err != nil || got != test.want {
 				t.Fatalf("contentMatchesFile() = %v, %v; want %v", got, err, test.want)
 			}
 		})
+	}
+}
+
+func writeZIPArchive(t *testing.T, path, name, content string) {
+	t.Helper()
+	f, err := os.Create(path) //nolint:gosec // path is supplied by a test and remains inside its temporary directory.
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	w, err := zw.Create(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeTarArchive(t *testing.T, path, name, content string) {
+	t.Helper()
+	f, err := os.Create(path) //nolint:gosec // path is supplied by a test and remains inside its temporary directory.
+	if err != nil {
+		t.Fatal(err)
+	}
+	tw := tar.NewWriter(f)
+	if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(content))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
