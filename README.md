@@ -122,13 +122,12 @@ destination directory. If flattened entries have the same filename, identical
 content is accepted while differing content requires `--force` (the later entry
 wins when forced). Both `--flat` and `--keep` require `--extract`.
 
-### Debugging slow requests
+### Debugging HTTP requests
 
-Use `--debug` to see activity immediately during operations that require many
-paginated requests:
+Use `--debug` to inspect GitHub requests, redirects, and downloads:
 
 ```sh
-ghget astral-sh/uv --tags --debug
+ghget astral-sh/uv/'uv-{arch}-{vendor}-{os}.tar.gz' --debug
 ```
 
 Debug output is written to standard error using Go's `slog` text format. Every
@@ -167,7 +166,7 @@ Discovery uses GitHub's public web endpoints:
 - `/OWNER/REPO/releases/expanded_assets/TAG` to enumerate assets;
 - `/OWNER/REPO/releases/download/TAG/ASSET` to download an asset;
 - `/OWNER/REPO.git/info/refs?service=git-upload-pack` to enumerate every tag in
-  one Git smart-HTTP request, with paginated `/releases` HTML as a fallback.
+  one Git smart-HTTP request.
 
 This avoids API authentication and API rate limits, but GitHub can change these
-HTML endpoints. Network and HTTP errors are reported directly.
+public endpoints. Network and HTTP errors are reported directly.
