@@ -1,7 +1,7 @@
 # ghget - smart GitHub asset downloader - fetch, verify, extract. no token required
 
 `ghget` downloads assets from public GitHub releases without authentication and
-without calling `api.github.com`, avoiding rate-limits imposed on unathenticated users.
+without calling `api.github.com`, avoiding rate-limits imposed on unauthenticated users.
 It can select several assets, verify their published checksums, and safely extract common archive formats.
 
 ## Install
