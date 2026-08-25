@@ -1,3 +1,4 @@
+// Package app implements ghget's command-line workflow.
 package app
 
 import (
@@ -56,6 +57,7 @@ type releaseClient interface {
 	Download(context.Context, gh.Asset) (io.ReadCloser, int64, error)
 }
 
+// App coordinates release discovery, verification, downloads, and extraction.
 type App struct {
 	client       releaseClient
 	stdout       io.Writer
@@ -64,6 +66,7 @@ type App struct {
 	logger       *slog.Logger
 }
 
+// New constructs an App backed by GitHub's public release endpoints.
 func New(httpClient *http.Client, stdout, stderr io.Writer) *App {
 	return &App{
 		client:       gh.NewClient(httpClient),
@@ -73,10 +76,12 @@ func New(httpClient *http.Client, stdout, stderr io.Writer) *App {
 	}
 }
 
+// NewWithClient constructs an App with a custom release client.
 func NewWithClient(client releaseClient, stdout, stderr io.Writer) *App {
 	return &App{client: client, stdout: stdout, stderr: stderr, unquarantine: unquarantine}
 }
 
+// Run parses arguments and executes the requested release operation.
 func (a *App) Run(ctx context.Context, args []string) error {
 	opts, err := parseOptions(args)
 	if err != nil {
@@ -100,7 +105,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 
 	if opts.listTags {
 		if pattern != "" || tag != "latest" {
-			return fmt.Errorf("--tag expects OWNER/REPO without a file or tag")
+			return errors.New("--tag expects OWNER/REPO without a file or tag")
 		}
 		started := time.Now()
 		a.debug(ctx, "listing release tags", "owner", owner, "repo", repo)
@@ -129,7 +134,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	}
 	if opts.listAssets {
 		if pattern != "" {
-			return fmt.Errorf("--list expects OWNER/REPO[@TAG] without a file")
+			return errors.New("--list expects OWNER/REPO[@TAG] without a file")
 		}
 		for _, asset := range assets {
 			if _, err := fmt.Fprintln(a.stdout, asset.Name); err != nil {
@@ -139,7 +144,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		return nil
 	}
 	if pattern == "" {
-		return fmt.Errorf("missing file pattern; use --list to list assets")
+		return errors.New("missing file pattern; use --list to list assets")
 	}
 
 	names := make([]string, len(assets))
@@ -163,7 +168,8 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(opts.directory, 0o755); err != nil {
+	// Release artifacts are user-facing files and should remain accessible under the user's umask.
+	if err := os.MkdirAll(opts.directory, 0o755); err != nil { //nolint:gosec // Conventional download directory permissions are intentional.
 		return fmt.Errorf("create destination directory: %w", err)
 	}
 	skip, err := a.checkExistingDownloads(selectedNames, byName, opts, verification)
@@ -523,7 +529,7 @@ func parseTarget(target string) (owner, repo, pattern, tag string, err error) {
 	tag = "latest"
 	parts := strings.SplitN(target, "/", 3)
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", "", "", fmt.Errorf("target must be OWNER/REPO[/FILE][@TAG]")
+		return "", "", "", "", errors.New("target must be OWNER/REPO[/FILE][@TAG]")
 	}
 	owner = parts[0]
 	repoPart := parts[1]
@@ -561,14 +567,14 @@ func makeExecutable(path string) error {
 
 func unquarantine(ctx context.Context, paths []string) error {
 	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("--unquarantine is only supported on macOS")
+		return errors.New("--unquarantine is only supported on macOS")
 	}
 	if len(paths) == 0 {
 		return nil
 	}
 	sort.Strings(paths)
 	args := append([]string{"xattr", "-dr", "com.apple.quarantine"}, paths...)
-	cmd := exec.CommandContext(ctx, "sudo", args...)
+	cmd := exec.CommandContext(ctx, "sudo", args...) //nolint:gosec // The executable is fixed and all path arguments originate from validated destinations.
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("remove quarantine attribute: %w", err)

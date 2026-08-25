@@ -14,7 +14,7 @@ import (
 func TestExtractZIP(t *testing.T) {
 	dir := t.TempDir()
 	archivePath := filepath.Join(dir, "tool.zip")
-	f, err := os.Create(archivePath)
+	f, err := os.Create(archivePath) //nolint:gosec // archivePath is inside the test's temporary directory.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestExtractZIP(t *testing.T) {
 	if len(results) != 1 || !results[0].Written {
 		t.Fatalf("results = %+v, want one written file", results)
 	}
-	got, err := os.ReadFile(filepath.Join(out, "bin", "tool"))
+	got, err := os.ReadFile(filepath.Join(out, "bin", "tool")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "binary" {
 		t.Fatalf("extracted content = %q, err = %v", got, err)
 	}
@@ -60,7 +60,7 @@ func TestExtractZIP(t *testing.T) {
 	if _, err := Extract(archivePath, out, "tool.zip", Options{Force: true}); err != nil {
 		t.Fatalf("force extraction: %v", err)
 	}
-	got, err = os.ReadFile(filepath.Join(out, "bin", "tool"))
+	got, err = os.ReadFile(filepath.Join(out, "bin", "tool")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "binary" {
 		t.Fatalf("force-extracted content = %q, err = %v", got, err)
 	}
@@ -91,7 +91,7 @@ func TestExtractTarGzip(t *testing.T) {
 	if _, err := Extract(archivePath, out, "bundle.tar.gz", Options{}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(out, "docs", "README"))
+	got, err := os.ReadFile(filepath.Join(out, "docs", "README")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "hello" {
 		t.Fatalf("extracted content = %q, err = %v", got, err)
 	}
@@ -99,7 +99,7 @@ func TestExtractTarGzip(t *testing.T) {
 	if _, err := Extract(archivePath, flatOut, "bundle.tar.gz", Options{Flat: true}); err != nil {
 		t.Fatal(err)
 	}
-	got, err = os.ReadFile(filepath.Join(flatOut, "README"))
+	got, err = os.ReadFile(filepath.Join(flatOut, "README")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "hello" {
 		t.Fatalf("flat extracted content = %q, err = %v", got, err)
 	}
@@ -110,7 +110,7 @@ func TestExtractTarGzip(t *testing.T) {
 
 func TestExtractRejectsTraversal(t *testing.T) {
 	archivePath := filepath.Join(t.TempDir(), "evil.zip")
-	f, err := os.Create(archivePath)
+	f, err := os.Create(archivePath) //nolint:gosec // archivePath is inside the test's temporary directory.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestExtractRejectsTraversal(t *testing.T) {
 
 func TestExtractZIPFlat(t *testing.T) {
 	archivePath := filepath.Join(t.TempDir(), "tool.zip")
-	f, err := os.Create(archivePath)
+	f, err := os.Create(archivePath) //nolint:gosec // archivePath is inside the test's temporary directory.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestExtractZIPFlat(t *testing.T) {
 		t.Fatalf("results = %+v, want two written and one unchanged", results)
 	}
 	for name, want := range map[string]string{"tool": "binary", "README": "documentation"} {
-		got, err := os.ReadFile(filepath.Join(out, name))
+		got, err := os.ReadFile(filepath.Join(out, name)) //nolint:gosec // The path is confined to the test's temporary directory.
 		if err != nil || string(got) != want {
 			t.Errorf("%s content = %q, err = %v", name, got, err)
 		}
@@ -194,7 +194,7 @@ func TestExtractZIPFlat(t *testing.T) {
 
 func TestExtractFlatCollision(t *testing.T) {
 	archivePath := filepath.Join(t.TempDir(), "collision.zip")
-	f, err := os.Create(archivePath)
+	f, err := os.Create(archivePath) //nolint:gosec // archivePath is inside the test's temporary directory.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func TestExtractFlatCollision(t *testing.T) {
 	if _, err := Extract(archivePath, out, "collision.zip", Options{Flat: true, Force: true}); err != nil {
 		t.Fatalf("force flat extraction: %v", err)
 	}
-	got, err := os.ReadFile(filepath.Join(out, "tool"))
+	got, err := os.ReadFile(filepath.Join(out, "tool")) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "second" {
 		t.Fatalf("tool content = %q, err = %v", got, err)
 	}

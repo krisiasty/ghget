@@ -1,3 +1,4 @@
+// Package checksum parses and verifies checksums for release assets.
 package checksum
 
 import (
@@ -7,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -22,11 +24,13 @@ var (
 	sidecarSuffixes = []string{".md5", ".sha1", ".sha256", ".sha512", ".md5sum", ".sha1sum", ".sha256sum", ".sha512sum", ".checksum"}
 )
 
+// Entry associates a hexadecimal digest with an optional release asset name.
 type Entry struct {
 	Filename string
 	Digest   string
 }
 
+// MismatchError reports a release asset whose content differs from its checksum.
 type MismatchError struct {
 	AssetName string
 	Expected  string
@@ -37,6 +41,7 @@ func (e *MismatchError) Error() string {
 	return fmt.Sprintf("checksum mismatch for %s: expected %s, got %s", e.AssetName, e.Expected, e.Actual)
 }
 
+// Parse reads checksums in common GNU, BSD, filename-first, or digest-only formats.
 func Parse(r io.Reader) ([]Entry, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
@@ -70,16 +75,17 @@ func Parse(r io.Reader) ([]Entry, error) {
 		return nil, fmt.Errorf("read checksum file: %w", err)
 	}
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("no supported checksums found")
+		return nil, errors.New("no supported checksums found")
 	}
 	return entries, nil
 }
 
+// ParseValueOrFile treats value as a digest or a path to a checksum file.
 func ParseValueOrFile(value string) ([]Entry, error) {
 	if supportedDigest(value) {
 		return []Entry{{Digest: strings.ToLower(value)}}, nil
 	}
-	f, err := os.Open(value)
+	f, err := os.Open(value) //nolint:gosec // value is an explicitly supplied checksum file path.
 	if err != nil {
 		return nil, fmt.Errorf("checksum must be a supported digest or readable file: %w", err)
 	}
@@ -87,6 +93,7 @@ func ParseValueOrFile(value string) ([]Entry, error) {
 	return Parse(f)
 }
 
+// VerifyFile checks the file at path against the entry for assetName.
 func VerifyFile(path, assetName string, entries []Entry) error {
 	entry, ok := findEntry(assetName, entries)
 	if !ok {
@@ -96,7 +103,7 @@ func VerifyFile(path, assetName string, entries []Entry) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // path is the selected local release artifact being verified.
 	if err != nil {
 		return err
 	}
@@ -115,11 +122,13 @@ func VerifyFile(path, assetName string, entries []Entry) error {
 	return nil
 }
 
+// HasEntry reports whether entries contain a checksum applicable to assetName.
 func HasEntry(assetName string, entries []Entry) bool {
 	_, ok := findEntry(assetName, entries)
 	return ok
 }
 
+// IsChecksumAsset reports whether name conventionally identifies a checksum file.
 func IsChecksumAsset(name string) bool {
 	lower := strings.ToLower(name)
 	for _, suffix := range []string{".sig", ".asc", ".minisig", ".pem"} {
@@ -139,6 +148,7 @@ func IsChecksumAsset(name string) bool {
 		base == "sha256sums" || base == "sha512sums" || base == "sha1sums" || base == "md5sums"
 }
 
+// TargetFromSidecar derives the target asset name from a checksum sidecar name.
 func TargetFromSidecar(name string) string {
 	lower := strings.ToLower(name)
 	for _, suffix := range sidecarSuffixes {
