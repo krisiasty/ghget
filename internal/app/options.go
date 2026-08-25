@@ -13,6 +13,8 @@ import (
 type options struct {
 	target       string
 	directory    string
+	directorySet bool
+	upgrade      bool
 	output       string
 	checksum     string
 	mode         matcher.Mode
@@ -55,6 +57,8 @@ func parseOptions(args []string) (options, error) {
 			opts.help = true
 		case "--version":
 			opts.version = true
+		case "--upgrade":
+			opts.upgrade = true
 		case "-l", "--list":
 			opts.listAssets = true
 		case "-t", "--tag", "--tags":
@@ -92,12 +96,16 @@ func parseOptions(args []string) (options, error) {
 			if err != nil {
 				return opts, err
 			}
+			opts.directorySet = true
 		case "-o", "--output":
 			v, err := value()
 			if err != nil {
 				return opts, err
 			}
-			opts.output = v
+			opts.output, err = expandHomePath(v)
+			if err != nil {
+				return opts, err
+			}
 		case "-c", "--checksum":
 			v, err := value()
 			if err != nil {
@@ -122,6 +130,9 @@ func parseOptions(args []string) (options, error) {
 	}
 	if opts.help || opts.version {
 		return opts, nil
+	}
+	if opts.upgrade {
+		return opts, validateUpgrade(opts, modeSet)
 	}
 	if opts.target == "" {
 		return opts, errors.New("missing OWNER/REPO[/FILE][@TAG] argument")
@@ -158,6 +169,9 @@ func expandHomePath(value string) (string, error) {
 
 func homePathRemainder(value string) (string, bool) {
 	for _, prefix := range []string{"~", "$HOME", "${HOME}"} {
+		if !strings.HasPrefix(value, prefix) {
+			continue
+		}
 		if value == prefix {
 			return "", true
 		}
@@ -170,4 +184,34 @@ func homePathRemainder(value string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// validateUpgrade rejects options that cannot apply to a self-upgrade, which
+// derives its own target, destination, and permissions.
+func validateUpgrade(opts options, modeSet bool) error {
+	if opts.target != "" {
+		return fmt.Errorf("--upgrade does not take a target; use OWNER/REPO/FILE to download %q", opts.target)
+	}
+	conflicts := []struct {
+		set  bool
+		name string
+	}{
+		{opts.listAssets, "--list"},
+		{opts.listTags, "--tag"},
+		{opts.extract, "--extract"},
+		{opts.keep, "--keep"},
+		{opts.flat, "--flat"},
+		{opts.output != "", "--output"},
+		{opts.directorySet, "--dir"},
+		{opts.checksum != "", "--checksum"},
+		{opts.executable, "--executable"},
+		{opts.unquarantine, "--unquarantine"},
+		{modeSet, "--glob or --regex"},
+	}
+	for _, conflict := range conflicts {
+		if conflict.set {
+			return fmt.Errorf("--upgrade cannot be combined with %s", conflict.name)
+		}
+	}
+	return nil
 }

@@ -1,10 +1,19 @@
-# ghget
+# ghget - smart GitHub asset downloader - fetch, verify, extract. no token required
 
 `ghget` downloads assets from public GitHub releases without authentication and
-without calling `api.github.com`. It can select several assets, verify their
-published checksums, and safely extract common archive formats.
+without calling `api.github.com`, avoiding rate-limits imposed on unauthenticated users.
+It can select several assets, verify their published checksums, and safely extract common archive formats.
 
 ## Install
+
+Ready-to-use binaries are published on the
+[releases page](https://github.com/krisiasty/ghget/releases/latest). Download
+the file matching your platform and install it onto your `PATH`:
+
+```sh
+curl -L -o ghget https://github.com/krisiasty/ghget/releases/latest/download/ghget_VERSION_OS_ARCH
+install -m 755 ghget ~/.local/bin/ghget
+```
 
 Homebrew on macOS:
 
@@ -23,12 +32,37 @@ for macOS, Linux, and Windows on AMD64 and ARM64. macOS releases also include
 `.tar.gz` archives used by the Homebrew cask. Windows filenames include the
 `.exe` extension.
 
+Once installed, `ghget` upgrades itself:
+
+```sh
+ghget --upgrade
+```
+
+This finds the running binary, downloads the latest release built for the
+current platform, verifies its published checksum, and replaces the binary in
+place with mode `0755`. When the binary is already the latest release, nothing
+is downloaded; add `--force` to reinstall it anyway. To install a different
+version, use the ordinary options and name the destination directly:
+
+```sh
+ghget krisiasty/ghget/'ghget_{tag}_{os}_{arch}@v0.1.1' --output ~/.local/bin/ghget --executable --force
+```
+
+`--upgrade` follows a symlink and replaces the file it points at, leaving the
+link alone. Before downloading anything it checks that the binary's directory is
+writable and that the binary belongs to the current user, reporting what to do
+instead when it is not. A Homebrew-installed binary is refused, because
+overwriting it would leave Homebrew's records stale — run
+`brew upgrade --cask ghget` for those. The previous binary is moved aside during
+the swap and restored if the download or checksum fails.
+
 ## Usage
 
 ```text
 ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
 ghget OWNER/REPO[@TAG] --list
 ghget OWNER/REPO --tag
+ghget --upgrade
 ghget --version
 ```
 
@@ -92,23 +126,36 @@ list uses ascending alphabetic order instead.
 | `-g` | `--glob` | Treat the file pattern as a glob |
 | `-r` | `--regex` | Treat the file pattern as a Go regular expression |
 | `-d PATH` | `--dir PATH` | Choose the destination directory; expand `~` or `$HOME` |
-| `-o NAME` | `--output NAME` | Rename a single downloaded asset |
+| `-o PATH` | `--output PATH` | Write a single asset to this filename or path |
 | `-e` | `--extract` | Extract ZIP, TAR, TAR.GZ/TGZ, or GZIP |
 | `-c VALUE` | `--checksum VALUE` | Verify against a digest or checksum file |
-| `-x` | `--executable` | Add executable bits to downloaded/extracted regular files |
+| `-x` | `--executable` | Add executable bits to downloaded/extracted regular files (mode `0755`) |
 | `-u` | `--unquarantine` | Run `sudo xattr -dr com.apple.quarantine` on macOS |
 | `-f` | `--force` | Overwrite existing downloaded or extracted files |
 | `-k` | `--keep` | Keep the downloaded archive when using `--extract` |
 | | `--flat` | Extract all files directly into the destination directory |
+| | `--upgrade` | Replace the running `ghget` binary with the latest release |
 | | `--debug` | Log structured HTTP telemetry to standard error |
 | | `--version` | Show version, commit, and build timestamp |
 
 Options may appear before or after the target. Existing files are never
 overwritten unless `--force` is supplied.
 
+Downloaded assets and archives retained with `--keep` are written with mode
+`0644`, because public release assets need no stricter permissions. Permissions
+are applied after checksum verification, so a partial or unverified download is
+never readable. `--executable` raises downloaded and extracted files to `0755`;
+without it, extracted files keep the permissions recorded in the archive, so an
+executable stored in a `.tar.gz` stays executable.
+
 Missing destination directories and their parents are created automatically.
-At the beginning of a `--dir` path, `~`, `$HOME`, and `${HOME}` resolve to the
-current user's home directory even when shell quoting prevents expansion.
+At the beginning of a `--dir` or `--output` path, `~`, `$HOME`, and `${HOME}`
+resolve to the current user's home directory even when shell quoting prevents
+expansion.
+
+`--output` accepts a bare filename, a relative path resolved under `--dir`, or
+an absolute path that stands on its own, so a single asset can be named and
+placed in one option instead of two.
 
 When a download destination already exists without `--force`, `ghget` compares
 it with the selected published or GitHub-generated checksum before downloading

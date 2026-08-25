@@ -26,6 +26,9 @@ func TestExpandHomePath(t *testing.T) {
 		{value: "${HOME}", want: home},
 		{value: "${HOME}/downloads", want: filepath.Join(home, "downloads")},
 		{value: "~someone/downloads", want: "~someone/downloads"},
+		{value: "./downloads", want: "./downloads"},
+		{value: "a/downloads", want: "a/downloads"},
+		{value: "..", want: ".."},
 		{value: "$HOME-backup", want: "$HOME-backup"},
 		{value: "relative/$HOME", want: "relative/$HOME"},
 	}
@@ -38,6 +41,42 @@ func TestExpandHomePath(t *testing.T) {
 		if got != test.want {
 			t.Errorf("expandHomePath(%q) = %q, want %q", test.value, got, test.want)
 		}
+	}
+}
+
+func TestParseOptionsUpgrade(t *testing.T) {
+	opts, err := parseOptions([]string{"--upgrade"})
+	if err != nil {
+		t.Fatalf("parseOptions(--upgrade): %v", err)
+	}
+	if !opts.upgrade {
+		t.Fatal("upgrade = false, want true")
+	}
+	for _, args := range [][]string{
+		{"--upgrade", "acme/tool"},
+		{"--upgrade", "--dir", "/tmp"},
+		{"--upgrade", "--output", "ghget"},
+		{"--upgrade", "--extract"},
+		{"--upgrade", "--list"},
+		{"--upgrade", "--glob"},
+	} {
+		if _, err := parseOptions(args); err == nil {
+			t.Errorf("parseOptions(%v) = nil error, want a conflict", args)
+		}
+	}
+}
+
+func TestParseOptionsExpandsOutputPath(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts, err := parseOptions([]string{"acme/tool/file", "--output", "~/bin/tool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, "bin", "tool"); opts.output != want {
+		t.Fatalf("output = %q, want %q", opts.output, want)
 	}
 }
 
