@@ -1,0 +1,12 @@
+nvim-linux-arm64.appimage
+nvim-linux-arm64.appimage.zsync
+nvim-linux-arm64.tar.gz
+nvim-linux-x86_64.appimage
+nvim-linux-x86_64.appimage.zsync
+nvim-linux-x86_64.tar.gz
+nvim-macos-arm64.tar.gz
+nvim-macos-x86_64.tar.gz
+nvim-win-arm64.msi
+nvim-win-arm64.zip
+nvim-win64.msi
+nvim-win64.zip

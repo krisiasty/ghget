@@ -1,0 +1,17 @@
+install.ps1
+install.sh
+ollama-darwin.tgz
+Ollama-darwin.zip
+ollama-linux-amd64-mlx.tar.zst
+ollama-linux-amd64-rocm.tar.zst
+ollama-linux-amd64.tar.zst
+ollama-linux-arm64-jetpack5.tar.zst
+ollama-linux-arm64-jetpack6.tar.zst
+ollama-linux-arm64.tar.zst
+ollama-windows-amd64-mlx.zip
+ollama-windows-amd64-rocm.zip
+ollama-windows-amd64.zip
+ollama-windows-arm64.zip
+Ollama.dmg
+OllamaSetup.exe
+sha256sum.txt

@@ -23,6 +23,7 @@ import (
 	"github.com/krisiasty/ghget/internal/checksum"
 	gh "github.com/krisiasty/ghget/internal/github"
 	"github.com/krisiasty/ghget/internal/matcher"
+	"github.com/krisiasty/ghget/internal/platform"
 	"github.com/krisiasty/ghget/internal/tagorder"
 )
 
@@ -32,6 +33,7 @@ const downloadFileMode = 0o644
 
 const usage = `Usage:
   ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
+  ghget OWNER/REPO[@TAG] --auto [--install]
   ghget OWNER/REPO[@TAG] --list
   ghget OWNER/REPO --tag
   ghget --upgrade
@@ -41,6 +43,9 @@ TAG defaults to "latest". FILE_PATTERN supports {tag}, {owner}, {project}, {repo
 {arch}, {os}, and {vendor}.
 
 Options:
+  -a, --auto                 select the asset built for this OS, CPU, and C library
+  -i, --install              place only the programs an asset contains
+      --first                take the top match when --auto finds a tie
   -l, --list                 list release assets
   -t, --tag, --tags          list release tags
   -g, --glob                 treat FILE_PATTERN as a glob
@@ -76,6 +81,8 @@ type App struct {
 	// executablePath locates the running binary, replaced in tests.
 	executablePath func() (string, error)
 	logger         *slog.Logger
+	// platform is the host --auto and --install match assets against.
+	platform platform.Platform
 }
 
 // New constructs an App backed by GitHub's public release endpoints.
@@ -87,12 +94,20 @@ func New(httpClient *http.Client, stdout, stderr io.Writer) *App {
 		unquarantine: unquarantine,
 
 		executablePath: os.Executable,
+		platform:       platform.Detect(),
 	}
 }
 
 // NewWithClient constructs an App with a custom release client.
 func NewWithClient(client releaseClient, stdout, stderr io.Writer) *App {
-	return &App{client: client, stdout: stdout, stderr: stderr, unquarantine: unquarantine, executablePath: os.Executable}
+	return &App{
+		client:         client,
+		stdout:         stdout,
+		stderr:         stderr,
+		unquarantine:   unquarantine,
+		executablePath: os.Executable,
+		platform:       platform.Detect(),
+	}
 }
 
 // Run parses arguments and executes the requested release operation.
@@ -158,6 +173,9 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 	if err != nil {
 		return err
 	}
+	if opts.auto && pattern != "" {
+		return fmt.Errorf("--auto expects OWNER/REPO[@TAG] without a file pattern; drop --auto to download %q", pattern)
+	}
 	if opts.listAssets {
 		if pattern != "" {
 			return errors.New("--list expects OWNER/REPO[@TAG] without a file")
@@ -169,8 +187,8 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 		}
 		return nil
 	}
-	if pattern == "" {
-		return errors.New("missing file pattern; use --list to list assets")
+	if pattern == "" && !opts.auto {
+		return errors.New("missing file pattern; use --auto to select one automatically, or --list to list assets")
 	}
 
 	names := make([]string, len(assets))
@@ -179,18 +197,27 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 		names[i] = asset.Name
 		byName[asset.Name] = asset
 	}
-	selectedNames, err := selectAssets(names, pattern, placeholderValues{
-		tag:    tag,
-		owner:  owner,
-		repo:   repo,
-		goos:   runtime.GOOS,
-		goarch: runtime.GOARCH,
-	}, opts.mode)
-	if err != nil {
-		return err
-	}
-	if len(selectedNames) == 0 {
-		return fmt.Errorf("no release assets match %q", pattern)
+	var selectedNames []string
+	if opts.auto {
+		selected, err := a.autoSelect(ctx, assets, opts)
+		if err != nil {
+			return err
+		}
+		selectedNames = []string{selected}
+	} else {
+		selectedNames, err = selectAssets(names, pattern, placeholderValues{
+			tag:    tag,
+			owner:  owner,
+			repo:   repo,
+			goos:   runtime.GOOS,
+			goarch: runtime.GOARCH,
+		}, opts.mode)
+		if err != nil {
+			return err
+		}
+		if len(selectedNames) == 0 {
+			return fmt.Errorf("no release assets match %q", pattern)
+		}
 	}
 	if opts.output != "" && len(selectedNames) != 1 {
 		return fmt.Errorf("--output requires exactly one matching asset (matched %d)", len(selectedNames))
@@ -611,6 +638,21 @@ func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, ver
 		_, _ = fmt.Fprintf(a.stderr, "verified %s\n", asset.Name)
 	}
 
+	if opts.install {
+		paths, installErr := a.installAsset(tmpPath, asset, opts)
+		if installErr != nil {
+			return nil, installErr
+		}
+		if opts.keep {
+			archiveDestination := filepath.Join(opts.directory, asset.Name)
+			if err := saveTemporaryFile(tmpPath, archiveDestination, opts.force); err != nil {
+				return nil, fmt.Errorf("keep archive %s: %w", asset.Name, err)
+			}
+			paths = append(paths, archiveDestination)
+			_, _ = fmt.Fprintf(a.stderr, "kept archive %s\n", archiveDestination)
+		}
+		return paths, nil
+	}
 	if opts.extract {
 		archiveDestination := filepath.Join(opts.directory, asset.Name)
 		if opts.keep {
@@ -655,7 +697,12 @@ func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, ver
 }
 
 func downloadDisplayPath(asset gh.Asset, opts options) string {
-	if opts.extract {
+	// An installed asset is unpacked from a temporary file, so naming a
+	// destination path here would point at a file that never appears.
+	if opts.install && !opts.keep {
+		return asset.Name
+	}
+	if opts.extract || opts.install {
 		return filepath.Join(opts.directory, asset.Name)
 	}
 	destination, err := downloadDestination(asset, opts)
