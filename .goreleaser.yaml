@@ -3,7 +3,7 @@ version: 2
 project_name: ghget
 
 builds:
-  - id: binaries
+  - id: darwin
     binary: ghget
     ldflags:
       - >-
@@ -15,6 +15,20 @@ builds:
       - CGO_ENABLED=0
     goos:
       - darwin
+    goarch:
+      - amd64
+      - arm64
+  - id: others
+    binary: ghget
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/krisiasty/ghget/internal/buildinfo.version={{ .Version }}
+        -X github.com/krisiasty/ghget/internal/buildinfo.commit={{ .Commit }}
+        -X github.com/krisiasty/ghget/internal/buildinfo.built={{ .Date }}
+    env:
+      - CGO_ENABLED=0
+    goos:
       - linux
       - windows
     goarch:
@@ -25,10 +39,35 @@ builds:
 archives:
   - id: raw-binaries
     ids:
-      - binaries
+      - darwin
+      - others
     formats:
       - binary
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: macos-archives
+    ids:
+      - darwin
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+homebrew_casks:
+  - name: ghget
+    ids:
+      - macos-archives
+    homepage: "https://github.com/krisiasty/ghget"
+    description: "Smart GitHub release downloader for public repositories"
+    license: "Apache-2.0"
+    repository:
+      owner: krisiasty
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    binaries:
+      - ghget
+    hooks:
+      post:
+        install: |
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", staged_path]
 
 checksum:
   name_template: "checksums.txt"
