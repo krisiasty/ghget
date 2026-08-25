@@ -26,10 +26,15 @@ import (
 	"github.com/krisiasty/ghget/internal/tagorder"
 )
 
+// downloadFileMode is applied to downloaded assets and kept archives. Release
+// assets come from public repositories, so conventional permissions apply.
+const downloadFileMode = 0o644
+
 const usage = `Usage:
   ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
   ghget OWNER/REPO[@TAG] --list
   ghget OWNER/REPO --tag
+  ghget --upgrade
   ghget --version
 
 TAG defaults to "latest". FILE_PATTERN supports {tag}, {owner}, {project}, {repo},
@@ -41,7 +46,7 @@ Options:
   -g, --glob                 treat FILE_PATTERN as a glob
   -r, --regex                treat FILE_PATTERN as a regular expression
   -d, --dir PATH             destination directory (default: .); expands ~ and $HOME
-  -o, --output NAME          rename a single downloaded asset
+  -o, --output PATH          write a single asset to this filename or path
   -e, --extract              extract ZIP, TAR, TAR.GZ/TGZ, or GZIP assets
   -c, --checksum VALUE       checksum digest or checksum-file path
   -x, --executable           make downloaded or extracted files executable
@@ -49,6 +54,7 @@ Options:
   -f, --force                overwrite existing files
   -k, --keep                 keep the downloaded archive after extraction
       --flat                 extract all files directly into the destination directory
+      --upgrade              replace the running ghget binary with the latest release
       --debug                log HTTP telemetry to stderr
       --version              show version and build information
   -h, --help                 show this help
@@ -67,7 +73,9 @@ type App struct {
 	stdout       io.Writer
 	stderr       io.Writer
 	unquarantine func(context.Context, []string) error
-	logger       *slog.Logger
+	// executablePath locates the running binary, replaced in tests.
+	executablePath func() (string, error)
+	logger         *slog.Logger
 }
 
 // New constructs an App backed by GitHub's public release endpoints.
@@ -77,12 +85,14 @@ func New(httpClient *http.Client, stdout, stderr io.Writer) *App {
 		stdout:       stdout,
 		stderr:       stderr,
 		unquarantine: unquarantine,
+
+		executablePath: os.Executable,
 	}
 }
 
 // NewWithClient constructs an App with a custom release client.
 func NewWithClient(client releaseClient, stdout, stderr io.Writer) *App {
-	return &App{client: client, stdout: stdout, stderr: stderr, unquarantine: unquarantine}
+	return &App{client: client, stdout: stdout, stderr: stderr, unquarantine: unquarantine, executablePath: os.Executable}
 }
 
 // Run parses arguments and executes the requested release operation.
@@ -106,6 +116,14 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		}
 		a.logger.DebugContext(ctx, "debug telemetry enabled")
 	}
+	if opts.upgrade {
+		return a.upgrade(ctx, opts)
+	}
+	return a.fetch(ctx, opts)
+}
+
+// fetch resolves the release, selects assets, and downloads or extracts them.
+func (a *App) fetch(ctx context.Context, opts options) error {
 	owner, repo, pattern, tag, err := parseTarget(opts.target)
 	if err != nil {
 		return err
@@ -183,8 +201,10 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		return err
 	}
 	// Release artifacts are user-facing files and should remain accessible under the user's umask.
-	if err := os.MkdirAll(opts.directory, 0o755); err != nil { //nolint:gosec // Conventional download directory permissions are intentional.
-		return fmt.Errorf("create destination directory: %w", err)
+	for _, directory := range destinationDirectories(opts) {
+		if err := os.MkdirAll(directory, 0o755); err != nil { //nolint:gosec // Conventional download directory permissions are intentional.
+			return fmt.Errorf("create destination directory: %w", err)
+		}
 	}
 	skip, err := a.checkExistingDownloads(selectedNames, byName, opts, verification)
 	if err != nil {
@@ -561,7 +581,7 @@ func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, ver
 		}
 		downloaded = true
 	}
-	tmp, err := os.CreateTemp(opts.directory, ".ghget-*")
+	tmp, err := os.CreateTemp(temporaryDirectory(asset, opts), ".ghget-*")
 	if err != nil {
 		_ = body.Close()
 		return nil, fmt.Errorf("create temporary file: %w", err)
@@ -687,18 +707,67 @@ func saveTemporaryFile(tmpPath, destination string, force bool) error {
 			return err
 		}
 	}
+	// Downloaded assets carry no source mode, so apply conventional permissions
+	// for public content only after verification and destination checks pass.
+	if err := os.Chmod(tmpPath, downloadFileMode); err != nil {
+		return fmt.Errorf("set permissions on %s: %w", destination, err)
+	}
 	return os.Rename(tmpPath, destination)
 }
 
 func downloadDestination(asset gh.Asset, opts options) (string, error) {
-	outputName := asset.Name
 	if opts.output != "" {
-		outputName = opts.output
+		return outputPath(opts)
 	}
-	if filepath.Base(outputName) != outputName || outputName == "." || outputName == ".." {
-		return "", fmt.Errorf("output name must be a filename, not a path: %q", outputName)
+	if filepath.Base(asset.Name) != asset.Name || asset.Name == "." || asset.Name == ".." {
+		return "", fmt.Errorf("asset name must be a filename, not a path: %q", asset.Name)
 	}
-	return filepath.Join(opts.directory, outputName), nil
+	return filepath.Join(opts.directory, asset.Name), nil
+}
+
+// destinationDirectories lists the directories that must exist before writing.
+// A path-valued --output can land outside --dir.
+func destinationDirectories(opts options) []string {
+	directories := []string{opts.directory}
+	if opts.output == "" || opts.extract {
+		return directories
+	}
+	destination, err := outputPath(opts)
+	if err != nil {
+		// The destination is validated again before use, which reports the error.
+		return directories
+	}
+	if parent := filepath.Dir(destination); parent != opts.directory {
+		directories = append(directories, parent)
+	}
+	return directories
+}
+
+// temporaryDirectory returns the directory holding the in-progress download.
+// It must sit on the destination's filesystem, because the file is moved into
+// place with a rename.
+func temporaryDirectory(asset gh.Asset, opts options) string {
+	if opts.extract {
+		return opts.directory
+	}
+	destination, err := downloadDestination(asset, opts)
+	if err != nil {
+		return opts.directory
+	}
+	return filepath.Dir(destination)
+}
+
+// outputPath resolves --output, which may name a bare filename, a relative path
+// under --dir, or an absolute path that stands on its own.
+func outputPath(opts options) (string, error) {
+	output := opts.output
+	if output == "." || output == ".." || os.IsPathSeparator(output[len(output)-1]) {
+		return "", fmt.Errorf("output must include a filename: %q", output)
+	}
+	if filepath.IsAbs(output) {
+		return filepath.Clean(output), nil
+	}
+	return filepath.Join(opts.directory, output), nil
 }
 
 func parseTarget(target string) (owner, repo, pattern, tag string, err error) {
@@ -735,7 +804,7 @@ func makeExecutable(path string) error {
 	if !info.Mode().IsRegular() {
 		return nil
 	}
-	if err := os.Chmod(path, info.Mode().Perm()|0o111); err != nil {
+	if err := os.Chmod(path, info.Mode().Perm()|0o755); err != nil {
 		return fmt.Errorf("make %s executable: %w", path, err)
 	}
 	return nil

@@ -57,6 +57,135 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestDownloadDestinationResolvesOutputPaths(t *testing.T) {
+	absolute := filepath.Join(t.TempDir(), "tool")
+	tests := []struct {
+		name    string
+		asset   string
+		output  string
+		want    string
+		wantErr bool
+	}{
+		{name: "asset name under dir", asset: "tool", want: filepath.Join("/dl", "tool")},
+		{name: "bare output filename", asset: "tool", output: "renamed", want: filepath.Join("/dl", "renamed")},
+		{name: "relative output path", asset: "tool", output: "sub/renamed", want: filepath.Join("/dl", "sub", "renamed")},
+		{name: "absolute output path", asset: "tool", output: absolute, want: absolute},
+		{name: "output with trailing separator", asset: "tool", output: "sub/", wantErr: true},
+		{name: "output naming current directory", asset: "tool", output: ".", wantErr: true},
+		{name: "output naming parent directory", asset: "tool", output: "..", wantErr: true},
+		{name: "asset name containing a path", asset: "sub/tool", wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			opts := options{directory: "/dl", output: test.output}
+			got, err := downloadDestination(gh.Asset{Name: test.asset}, opts)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("downloadDestination(%q, %q) = %q, want error", test.asset, test.output, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Fatalf("downloadDestination(%q, %q) = %q, want %q", test.asset, test.output, got, test.want)
+			}
+		})
+	}
+}
+
+func TestDownloadCreatesOutputParentDirectory(t *testing.T) {
+	client := &fakeClient{
+		tag:     "v1",
+		assets:  []gh.Asset{{Name: "tool", URL: "asset:tool"}},
+		content: map[string]string{"tool": "binary data"},
+	}
+	destination := filepath.Join(t.TempDir(), "nested", "bin", "ghget")
+	a := NewWithClient(client, io.Discard, io.Discard)
+	if err := a.Run(context.Background(), []string{"acme/tool/tool", "--output", destination}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(destination) //nolint:gosec // The path is confined to the test's temporary directory.
+	if err != nil || string(got) != "binary data" {
+		t.Fatalf("downloaded content = %q, err = %v", got, err)
+	}
+}
+
+func TestDownloadUsesConventionalMode(t *testing.T) {
+	client := &fakeClient{
+		tag:     "v1",
+		assets:  []gh.Asset{{Name: "tool", URL: "asset:tool"}},
+		content: map[string]string{"tool": "binary data"},
+	}
+	dir := t.TempDir()
+	a := NewWithClient(client, io.Discard, io.Discard)
+	if err := a.Run(context.Background(), []string{"acme/tool/tool", "--dir", dir}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "tool"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("downloaded mode = %04o, want %04o", got, 0o644)
+	}
+}
+
+func TestExtractionPreservesArchiveExecutableBit(t *testing.T) {
+	var archiveContent bytes.Buffer
+	zw := zip.NewWriter(&archiveContent)
+	header := &zip.FileHeader{Name: "tool", Method: zip.Deflate}
+	header.SetMode(0o755)
+	w, err := zw.CreateHeader(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("executable")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeClient{
+		tag:     "v1",
+		assets:  []gh.Asset{{Name: "tool.zip", URL: "asset:tool.zip"}},
+		content: map[string]string{"tool.zip": archiveContent.String()},
+	}
+	dir := t.TempDir()
+	a := NewWithClient(client, io.Discard, io.Discard)
+	if err := a.Run(context.Background(), []string{"acme/tool/tool.zip", "--dir", dir, "--extract"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "tool"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("extracted mode = %04o, want %04o", got, 0o755)
+	}
+}
+
+func TestExecutableDownloadUsesConventionalMode(t *testing.T) {
+	client := &fakeClient{
+		tag:     "v1",
+		assets:  []gh.Asset{{Name: "tool", URL: "asset:tool"}},
+		content: map[string]string{"tool": "binary data"},
+	}
+	dir := t.TempDir()
+	a := NewWithClient(client, io.Discard, io.Discard)
+	if err := a.Run(context.Background(), []string{"acme/tool/tool", "--dir", dir, "--executable"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "tool"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("downloaded mode = %04o, want %04o", got, 0o755)
+	}
+}
+
 func TestDownloadWithAutomaticChecksum(t *testing.T) {
 	content := "binary data"
 	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(content)))
