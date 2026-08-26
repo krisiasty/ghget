@@ -33,6 +33,17 @@ func Place(programs []string, destination string, force bool) ([]string, error) 
 	return placed, nil
 }
 
+// PlaceAs copies program to the exact target path. An existing file with
+// identical content is left alone; one that differs is an error unless force
+// is set.
+func PlaceAs(program, target string, force bool) error {
+	// Conventional download directory permissions.
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil { //nolint:gosec // Destination directories intentionally follow the convention used elsewhere in ghget.
+		return fmt.Errorf("create destination directory: %w", err)
+	}
+	return place(program, target, force)
+}
+
 func place(source, target string, force bool) error {
 	if !force {
 		switch same, err := matchesExistingFile(source, target); {

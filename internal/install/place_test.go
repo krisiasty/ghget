@@ -40,6 +40,23 @@ func TestPlaceCopiesProgramsIntoDestination(t *testing.T) {
 	}
 }
 
+func TestPlaceAsUsesTheExactTarget(t *testing.T) {
+	source := buildTree(t, map[string]fs.FileMode{"tool": 0o755})
+	destination := filepath.Join(t.TempDir(), "missing", "bin")
+	target := filepath.Join(destination, "renamed")
+
+	if err := PlaceAs(filepath.Join(source, "tool"), target, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if content := readFile(t, target); content != "tool" {
+		t.Fatalf("target content = %q, want the program", content)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "tool")); !os.IsNotExist(err) {
+		t.Fatalf("natural-name target exists or cannot be checked: %v", err)
+	}
+}
+
 func TestPlaceKeepsAnIdenticalExistingFile(t *testing.T) {
 	source := buildTree(t, map[string]fs.FileMode{"tool": 0o755})
 	destination := t.TempDir()

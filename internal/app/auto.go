@@ -102,23 +102,12 @@ func (a *App) installAsset(downloaded string, asset gh.Asset, opts options) ([]s
 	if err != nil {
 		return nil, err
 	}
-	destination, err := installDestination(programs, opts)
-	if err != nil {
-		return nil, err
-	}
-	placed, err := install.Place(programs, destination, opts.force)
+	placed, err := placePrograms(programs, opts)
 	for _, path := range placed {
 		_, _ = fmt.Fprintf(a.stderr, "installed %s\n", path)
 	}
 	if err != nil {
 		return placed, err
-	}
-	if opts.output != "" && len(placed) == 1 {
-		renamed, err := renameInstalled(placed[0], opts)
-		if err != nil {
-			return placed, err
-		}
-		placed[0] = renamed
 	}
 	return placed, nil
 }
@@ -143,33 +132,21 @@ func (a *App) stageAsset(downloaded string, asset gh.Asset, staging string) ([]s
 	return programs, nil
 }
 
-// installDestination reports where programs should be placed, honouring an
-// --output path that names a single program.
-func installDestination(programs []string, opts options) (string, error) {
+// placePrograms installs programs under their natural names, or places a
+// single program directly at the path named by --output.
+func placePrograms(programs []string, opts options) ([]string, error) {
 	if opts.output == "" {
-		return opts.directory, nil
+		return install.Place(programs, opts.directory, opts.force)
 	}
 	if len(programs) != 1 {
-		return "", fmt.Errorf("--output requires exactly one program to install (found %d)", len(programs))
+		return nil, fmt.Errorf("--output requires exactly one program to install (found %d)", len(programs))
 	}
 	target, err := outputPath(opts)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return filepath.Dir(target), nil
-}
-
-// renameInstalled gives a single installed program the name --output asked for.
-func renameInstalled(placed string, opts options) (string, error) {
-	target, err := outputPath(opts)
-	if err != nil {
-		return "", err
+	if err := install.PlaceAs(programs[0], target, opts.force); err != nil {
+		return nil, err
 	}
-	if target == placed {
-		return placed, nil
-	}
-	if err := os.Rename(placed, target); err != nil {
-		return "", fmt.Errorf("name installed program %s: %w", target, err)
-	}
-	return target, nil
+	return []string{target}, nil
 }

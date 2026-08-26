@@ -119,6 +119,49 @@ func TestAutoInstallNamesABareBinaryAfterItsProgram(t *testing.T) {
 	}
 }
 
+func TestAutoInstallOutputLeavesNaturalNameUntouched(t *testing.T) {
+	archive := tarGzip(t, map[string]tarEntry{"tool": {mode: 0o755, content: "program"}})
+	client := &fakeClient{
+		tag:     "v1.0.0",
+		assets:  assetsNamed("tool_1.0.0_linux_amd64.tar.gz"),
+		content: map[string]string{"tool_1.0.0_linux_amd64.tar.gz": archive},
+	}
+	directory := t.TempDir()
+	natural := filepath.Join(directory, "tool")
+	if err := os.WriteFile(natural, []byte("program"), 0o755); err != nil { //nolint:gosec // The fixture stands in for an existing installed program.
+		t.Fatal(err)
+	}
+	before, err := os.Stat(natural)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr strings.Builder
+	app := newTestApp(client, io.Discard, &stderr, linuxAMD64)
+
+	args := []string{"acme/tool", "--auto", "--install", "--output", "renamed", "--dir", directory}
+	if err := app.Run(context.Background(), args); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := os.Stat(natural)
+	if err != nil {
+		t.Fatalf("natural-name file was removed: %v", err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatal("natural-name file was replaced")
+	}
+	target := filepath.Join(directory, "renamed")
+	if content := readIfExists(t, target); content != "program" {
+		t.Fatalf("installed content = %q, want the program", content)
+	}
+	if got := entryNames(t, directory); strings.Join(got, ",") != "renamed,tool" {
+		t.Fatalf("destination holds %v, want the existing and renamed programs", got)
+	}
+	if !strings.Contains(stderr.String(), "installed "+target+"\n") {
+		t.Fatalf("stderr = %q, want it to report %q", stderr.String(), target)
+	}
+}
+
 func TestInstallBareBinaryDoesNotUseSystemTemp(t *testing.T) {
 	downloadDirectory := t.TempDir()
 	downloaded := filepath.Join(downloadDirectory, ".ghget-download")
