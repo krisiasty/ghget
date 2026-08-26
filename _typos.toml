@@ -1,0 +1,6 @@
+# Release asset listings under internal/autoselect/testdata are captured
+# verbatim from GitHub so that selection is tested against real names. They are
+# data rather than prose, and contain upstream spellings such as the "intoto"
+# in an in-toto attestation filename.
+[files]
+extend-exclude = ["internal/autoselect/testdata/*.txt"]
