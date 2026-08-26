@@ -62,7 +62,6 @@ func TestLookupIsCaseInsensitive(t *testing.T) {
 
 func TestPopularDevOpsAliases(t *testing.T) {
 	tests := []Entry{
-		{Alias: "awscli", Repository: "aws/aws-cli"},
 		{Alias: "azure-cli", Repository: "Azure/azure-cli"},
 		{Alias: "helm", Repository: "helm/helm"},
 		{Alias: "hf", Repository: "huggingface/huggingface_hub"},
@@ -84,6 +83,18 @@ func TestPopularDevOpsAliases(t *testing.T) {
 		}
 		if !found || repository != test.Repository {
 			t.Fatalf("Lookup(%q) = %q, %v, want %q, true", test.Alias, repository, found, test.Repository)
+		}
+	}
+}
+
+func TestInstallerOnlyToolsAreNotAliased(t *testing.T) {
+	for _, alias := range []string{"aws", "awscli"} {
+		repository, found, err := Lookup(alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if found {
+			t.Fatalf("Lookup(%q) = %q, true, want no built-in alias", alias, repository)
 		}
 	}
 }

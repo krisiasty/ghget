@@ -3,10 +3,6 @@
 # Declarative continuous deployment for Kubernetes.
 argocd                  argoproj/argo-cd
 
-# The universal command-line interface for Amazon Web Services.
-aws                     aws/aws-cli
-awscli                  aws/aws-cli
-
 # The Azure command-line interface.
 az                      Azure/azure-cli
 azure-cli               Azure/azure-cli
