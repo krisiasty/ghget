@@ -13,6 +13,10 @@ rg      BurntSushi/ripgrep
 
 Aliases are case-insensitive and must be unique. Blank lines and lines whose first non-whitespace character is `#` are ignored.
 
+Each tool group must have a one-line comment describing the project. When a
+tool has multiple common executable names, put its aliases together below a
+single description.
+
 After editing the registry, regenerate its compressed embedded form:
 
 ```sh

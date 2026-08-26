@@ -60,6 +60,34 @@ func TestLookupIsCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestPopularDevOpsAliases(t *testing.T) {
+	tests := []Entry{
+		{Alias: "awscli", Repository: "aws/aws-cli"},
+		{Alias: "azure-cli", Repository: "Azure/azure-cli"},
+		{Alias: "helm", Repository: "helm/helm"},
+		{Alias: "hf", Repository: "huggingface/huggingface_hub"},
+		{Alias: "hwatch", Repository: "blacknon/hwatch"},
+		{Alias: "jq", Repository: "jqlang/jq"},
+		{Alias: "k9s", Repository: "derailed/k9s"},
+		{Alias: "kubeadm", Repository: "kubernetes/kubernetes"},
+		{Alias: "kubectl", Repository: "kubernetes/kubectl"},
+		{Alias: "openbao", Repository: "openbao/openbao"},
+		{Alias: "opentofu", Repository: "opentofu/opentofu"},
+		{Alias: "rclone", Repository: "rclone/rclone"},
+		{Alias: "terraform", Repository: "hashicorp/terraform"},
+		{Alias: "vault", Repository: "hashicorp/vault"},
+	}
+	for _, test := range tests {
+		repository, found, err := Lookup(test.Alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !found || repository != test.Repository {
+			t.Fatalf("Lookup(%q) = %q, %v, want %q, true", test.Alias, repository, found, test.Repository)
+		}
+	}
+}
+
 func TestEmbeddedAliasesMatchSource(t *testing.T) {
 	source, err := os.Open("../../registry/aliases.tsv")
 	if err != nil {

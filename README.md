@@ -249,6 +249,11 @@ Explicit `OWNER/REPO` targets continue to bypass alias resolution. The curated
 registry and contribution format are documented in
 [`registry/README.md`](registry/README.md).
 
+An alias resolves a repository; it does not guarantee that the project attaches
+compatible binaries to GitHub releases. Projects that distribute binaries
+elsewhere still resolve correctly, but `--auto --install` reports that no
+matching release asset is available.
+
 ## Automatic selection
 
 Selection reads each asset name rather than matching a list of known
