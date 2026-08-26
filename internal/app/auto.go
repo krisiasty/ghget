@@ -9,15 +9,15 @@ import (
 
 	"github.com/krisiasty/ghget/internal/archive"
 	"github.com/krisiasty/ghget/internal/autoselect"
-	gh "github.com/krisiasty/ghget/internal/github"
 	"github.com/krisiasty/ghget/internal/install"
+	"github.com/krisiasty/ghget/internal/source"
 )
 
 // autoSelect chooses the asset built for this host, reporting what it decided.
 //
 // An ambiguous or empty result is explained on stderr and then returned as an
 // error: downloading the wrong program is worse than asking which one to use.
-func (a *App) autoSelect(ctx context.Context, assets []gh.Asset, repo string, opts options) (string, error) {
+func (a *App) autoSelect(ctx context.Context, assets []source.Asset, repo string, opts options) (string, error) {
 	names := make([]string, len(assets))
 	for i, asset := range assets {
 		names[i] = asset.Name
@@ -88,7 +88,7 @@ func (a *App) debugSelection(ctx context.Context, result autoselect.Result) {
 
 // installAsset places the programs a downloaded asset contains into the
 // destination directory, discarding documentation and other archive contents.
-func (a *App) installAsset(downloaded string, asset gh.Asset, opts options) ([]string, error) {
+func (a *App) installAsset(downloaded string, asset source.Asset, opts options) ([]string, error) {
 	// The downloaded file is created on the destination filesystem so it can be
 	// moved atomically. Keep staging there too: renaming a bare binary into the
 	// system temporary directory fails with EXDEV when the filesystems differ.
@@ -114,7 +114,7 @@ func (a *App) installAsset(downloaded string, asset gh.Asset, opts options) ([]s
 
 // stageAsset unpacks an archive, or stages a bare executable under the name of
 // the program it holds, and returns the programs found.
-func (a *App) stageAsset(downloaded string, asset gh.Asset, staging string) ([]string, error) {
+func (a *App) stageAsset(downloaded string, asset source.Asset, staging string) ([]string, error) {
 	if !archive.Supported(asset.Name) {
 		staged := filepath.Join(staging, autoselect.ProgramName(asset.Name))
 		if err := os.Rename(downloaded, staged); err != nil {

@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"github.com/krisiasty/ghget/internal/source"
 )
 
 const defaultBaseURL = "https://github.com"
@@ -22,12 +24,8 @@ const defaultBaseURL = "https://github.com"
 var anchorRE = regexp.MustCompile(`(?is)<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>`)
 var generatedDigestRE = regexp.MustCompile(`(?i)\bvalue\s*=\s*["']sha256:([a-f0-9]{64})["']`)
 
-// Asset describes a downloadable release artifact and its optional GitHub digest.
-type Asset struct {
-	Name   string
-	URL    string
-	Digest string
-}
+// Asset is retained as an alias for compatibility with GitHub-specific callers.
+type Asset = source.Asset
 
 // Client discovers and downloads releases through GitHub's public web endpoints.
 type Client struct {

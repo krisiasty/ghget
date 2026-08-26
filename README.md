@@ -1,10 +1,12 @@
-# ghget - smart GitHub asset downloader - fetch, verify, extract. no token required
+# ghget - smart release asset downloader - fetch, verify, extract. no token required
 
 `ghget` downloads assets from public GitHub releases without authentication and
-without calling `api.github.com`, avoiding rate-limits imposed on unauthenticated users.
-It can select several assets, verify their published checksums, and safely extract common archive formats.
+without calling `api.github.com`, avoiding rate-limits imposed on unauthenticated
+users. Built-in aliases can also use other trusted release sources. It can
+select several assets, verify their published checksums, and safely extract
+common archive formats.
 
-## Install any tool from a GitHub release
+## Install a tool from its release
 
 Name a built-in tool alias or a repository. `ghget` resolves the repository,
 works out which asset was built for this machine, verifies its published
@@ -233,11 +235,12 @@ wins when forced). Both `--flat` and `--keep` require `--extract`.
 
 ## Repository aliases
 
-A built-in repository alias lets common tools be named without remembering the
-GitHub owner:
+A built-in repository alias lets common tools be named without remembering its
+owner or release source:
 
 ```sh
 ghget fd --auto --install
+ghget kubectl --auto --install
 ```
 
 The resolved repository is always reported before release selection. Aliases
@@ -249,14 +252,17 @@ An alias may also provide an asset hint when one repository publishes separate
 tools. For example, `kubens` resolves to `ahmetb/kubectx` while still selecting
 the release asset whose product name is `kubens`.
 
+Aliases may select a compiled-in release backend for projects that publish
+outside GitHub Releases. For example, `kubectl` and `kubeadm` use `dl.k8s.io`,
+including its mandatory SHA-256 sidecars. Registry entries can name only
+backends implemented by ghget; they cannot supply arbitrary download URLs.
+
 Explicit `OWNER/REPO` targets continue to bypass alias resolution. The curated
 registry and contribution format are documented in
 [`registry/README.md`](registry/README.md).
 
-An alias resolves a repository; it does not guarantee that the project attaches
-compatible binaries to GitHub releases. Projects that distribute binaries
-elsewhere still resolve correctly, but `--auto --install` reports that no
-matching release asset is available.
+An alias does not guarantee that a compatible binary exists for every platform.
+Unsupported combinations are reported before a download starts.
 
 ## Automatic selection
 
@@ -326,7 +332,7 @@ decide what lands on disk.
 
 ### Debugging HTTP requests
 
-Use `--debug` to inspect GitHub requests, redirects, and downloads:
+Use `--debug` to inspect requests, redirects, and downloads:
 
 ```sh
 ghget astral-sh/uv/'uv-{arch}-{vendor}-{os}.tar.gz' --debug
@@ -352,17 +358,19 @@ itself matches the requested file pattern, it is saved from the already-fetched
 content and verified with GitHub's generated digest when available, rather than
 recursively requiring another checksum file.
 
-If no published checksum entry applies to a selected asset, `ghget` falls back
-to the SHA-256 digest generated and displayed by GitHub for that release asset.
-User-provided checksums take precedence over both published files and GitHub's
-generated digest.
+If no published checksum entry applies to a selected GitHub asset, `ghget`
+falls back to the SHA-256 digest generated and displayed by GitHub for that
+release asset. User-provided checksums take precedence where the selected
+backend does not require its own published checksum. They cannot bypass a
+backend's mandatory checksum policy.
 
 Checksum manifests may contain `checksum filename`, `filename checksum`, BSD
 `SHA256 (filename) = checksum`, or a single unnamed checksum.
 
-## GitHub access
+## Release sources
 
-Discovery uses GitHub's public web endpoints:
+Explicit `OWNER/REPO` targets and ordinary aliases use GitHub's public web
+endpoints:
 
 - `/OWNER/REPO/releases/latest` to resolve the latest tag via its redirect;
 - `/OWNER/REPO/releases/expanded_assets/TAG` to enumerate assets;
@@ -372,3 +380,11 @@ Discovery uses GitHub's public web endpoints:
 
 This avoids API authentication and API rate limits, but GitHub can change these
 public endpoints. Network and HTTP errors are reported directly.
+
+The `kubectl` and `kubeadm` aliases use the fixed official Kubernetes layout:
+
+- `/release/stable.txt` to resolve the current stable version;
+- `/release/VERSION/bin/OS/ARCH/COMPONENT` to download a binary;
+- the matching `.sha256` sidecar to verify it before installation.
+
+Explicit versions such as `kubectl@v1.36.2` skip the stable-version lookup.

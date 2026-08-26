@@ -1,4 +1,5 @@
-// Package repoalias resolves built-in tool aliases to GitHub repositories.
+// Package repoalias resolves built-in tool aliases to repositories and trusted
+// release backends.
 package repoalias
 
 import (
@@ -23,13 +24,13 @@ const maxRegistrySize = 16 << 20
 //go:embed aliases.tsv.zst
 var compressedAliases []byte
 
-// Entry maps a case-insensitive alias to a GitHub OWNER/REPO identifier. An
-// optional asset hint identifies the program when a repository publishes
-// several independently packaged tools.
+// Entry maps a case-insensitive alias to a canonical OWNER/REPO identifier.
+// Optional asset and backend fields identify the artifact and download source.
 type Entry struct {
 	Alias      string
 	Repository string
 	AssetHint  string
+	Backend    string
 }
 
 var loadEmbedded = sync.OnceValues(func() ([]Entry, error) {
@@ -63,9 +64,9 @@ func Lookup(alias string) (Entry, bool, error) {
 	return entries[index], true, nil
 }
 
-// Parse reads aliases, repositories, and optional asset hints separated by any
-// non-empty run of whitespace. Blank lines and full-line comments beginning
-// with # are ignored.
+// Parse reads aliases, repositories, optional asset hints, and optional source
+// backends separated by whitespace. Blank lines and full-line comments
+// beginning with # are ignored.
 func Parse(reader io.Reader, source string) ([]Entry, error) {
 	entries := make([]Entry, 0)
 	seen := make(map[string]int)
@@ -76,9 +77,9 @@ func Parse(reader io.Reader, source string) ([]Entry, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) < 2 || len(fields) > 3 {
+		if len(fields) < 2 || len(fields) > 4 {
 			return nil, fmt.Errorf(
-				"%s:%d: expected alias, OWNER/REPO, and optional asset hint, found %d fields",
+				"%s:%d: expected alias, OWNER/REPO, optional asset hint, and optional backend, found %d fields",
 				source,
 				lineNumber,
 				len(fields),
@@ -89,6 +90,11 @@ func Parse(reader io.Reader, source string) ([]Entry, error) {
 		assetHint := ""
 		if len(fields) == 3 {
 			assetHint = strings.ToLower(fields[2])
+		}
+		backend := ""
+		if len(fields) == 4 {
+			assetHint = strings.ToLower(fields[2])
+			backend = strings.ToLower(fields[3])
 		}
 		if err := validateAlias(alias); err != nil {
 			return nil, fmt.Errorf("%s:%d: %w", source, lineNumber, err)
@@ -101,11 +107,16 @@ func Parse(reader io.Reader, source string) ([]Entry, error) {
 				return nil, fmt.Errorf("%s:%d: %w", source, lineNumber, err)
 			}
 		}
+		if backend != "" {
+			if err := validateBackend(backend); err != nil {
+				return nil, fmt.Errorf("%s:%d: %w", source, lineNumber, err)
+			}
+		}
 		if previous, exists := seen[alias]; exists {
 			return nil, fmt.Errorf("%s:%d: duplicate alias %q first declared on line %d", source, lineNumber, alias, previous)
 		}
 		seen[alias] = lineNumber
-		entries = append(entries, Entry{Alias: alias, Repository: repository, AssetHint: assetHint})
+		entries = append(entries, Entry{Alias: alias, Repository: repository, AssetHint: assetHint, Backend: backend})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read %s: %w", source, err)
@@ -130,6 +141,15 @@ func validateAssetHint(assetHint string) error {
 	for _, character := range assetHint {
 		if unicode.IsSpace(character) || character == '/' || character == '\\' || character == '@' {
 			return fmt.Errorf("invalid asset hint %q", assetHint)
+		}
+	}
+	return nil
+}
+
+func validateBackend(backend string) error {
+	for _, character := range backend {
+		if unicode.IsSpace(character) || character == '/' || character == '\\' || character == '@' {
+			return fmt.Errorf("invalid backend %q", backend)
 		}
 	}
 	return nil

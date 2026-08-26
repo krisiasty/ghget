@@ -49,6 +49,10 @@ func generate(inputPath, outputPath string) error {
 			normalized.WriteByte('\t')
 			normalized.WriteString(entry.AssetHint)
 		}
+		if entry.Backend != "" {
+			normalized.WriteByte('\t')
+			normalized.WriteString(entry.Backend)
+		}
 		normalized.WriteByte('\n')
 	}
 	var compressed bytes.Buffer

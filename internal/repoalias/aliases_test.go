@@ -8,16 +8,16 @@ import (
 )
 
 func TestParseAcceptsRunsOfWhitespace(t *testing.T) {
-	input := "  # aliases\n\nFD\tsharkdp/fd\nkubens  ahmetb/kubectx\t kubens\nrg       BurntSushi/ripgrep\nuv\t  astral-sh/uv\n"
+	input := "  # aliases\n\nFD\tsharkdp/fd\nkubens  ahmetb/kubectx\t kubens\nkubectl kubernetes/kubectl kubectl kubernetes\nrg BurntSushi/ripgrep\n"
 	entries, err := Parse(strings.NewReader(input), "test aliases")
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []Entry{
 		{Alias: "fd", Repository: "sharkdp/fd"},
+		{Alias: "kubectl", Repository: "kubernetes/kubectl", AssetHint: "kubectl", Backend: "kubernetes"},
 		{Alias: "kubens", Repository: "ahmetb/kubectx", AssetHint: "kubens"},
 		{Alias: "rg", Repository: "BurntSushi/ripgrep"},
-		{Alias: "uv", Repository: "astral-sh/uv"},
 	}
 	if !reflect.DeepEqual(entries, want) {
 		t.Fatalf("Parse() = %#v, want %#v", entries, want)
@@ -31,10 +31,11 @@ func TestParseRejectsInvalidEntries(t *testing.T) {
 		want  string
 	}{
 		{name: "missing repository", input: "fd\n", want: "expected alias, OWNER/REPO"},
-		{name: "extra field", input: "fd sharkdp/fd hint extra\n", want: "found 4 fields"},
+		{name: "extra field", input: "fd sharkdp/fd hint backend extra\n", want: "found 5 fields"},
 		{name: "alias path", input: "tools/fd sharkdp/fd\n", want: "invalid alias"},
 		{name: "invalid repository", input: "fd sharkdp\n", want: "invalid repository"},
 		{name: "invalid asset hint", input: "fd sharkdp/fd tools/fd\n", want: "invalid asset hint"},
+		{name: "invalid backend", input: "fd sharkdp/fd fd sources/github\n", want: "invalid backend"},
 		{name: "case-insensitive duplicate", input: "fd sharkdp/fd\nFD fork/fd\n", want: "duplicate alias"},
 	}
 	for _, test := range tests {
@@ -74,6 +75,18 @@ func TestLookupReturnsAssetHint(t *testing.T) {
 	}
 }
 
+func TestLookupReturnsBackend(t *testing.T) {
+	for _, alias := range []string{"kubeadm", "kubectl"} {
+		entry, found, err := Lookup(alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !found || entry.AssetHint != alias || entry.Backend != "kubernetes" {
+			t.Fatalf("Lookup(%q) = %#v, %v, want Kubernetes backend for %q", alias, entry, found, alias)
+		}
+	}
+}
+
 func TestPopularDevOpsAliases(t *testing.T) {
 	tests := []Entry{
 		{Alias: "calicoctl", Repository: "projectcalico/calico"},
@@ -83,6 +96,8 @@ func TestPopularDevOpsAliases(t *testing.T) {
 		{Alias: "hwatch", Repository: "blacknon/hwatch"},
 		{Alias: "jq", Repository: "jqlang/jq"},
 		{Alias: "k9s", Repository: "derailed/k9s"},
+		{Alias: "kubeadm", Repository: "kubernetes/kubernetes"},
+		{Alias: "kubectl", Repository: "kubernetes/kubectl"},
 		{Alias: "openbao", Repository: "openbao/openbao"},
 		{Alias: "opentofu", Repository: "opentofu/opentofu"},
 		{Alias: "rclone", Repository: "rclone/rclone"},
@@ -100,7 +115,7 @@ func TestPopularDevOpsAliases(t *testing.T) {
 
 func TestUnsupportedToolsAreNotAliased(t *testing.T) {
 	for _, alias := range []string{
-		"aws", "awscli", "az", "azure-cli", "hf", "kubeadm", "kubectl", "pulumi", "terraform", "vault",
+		"aws", "awscli", "az", "azure-cli", "hf", "pulumi", "terraform", "vault",
 	} {
 		entry, found, err := Lookup(alias)
 		if err != nil {
