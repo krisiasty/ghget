@@ -222,7 +222,8 @@ type facts struct {
 // helper programs a release often publishes alongside.
 func classify(tokens []string, project string) facts {
 	var f facts
-	f.projectMatch = namesProject(tokens, project)
+	projectWords := tokenize(strings.ToLower(project))
+	f.projectMatch = namesProject(tokens, projectWords)
 	for _, token := range tokens {
 		if debugSymbolTokens[token] {
 			f.debugSymbols = true
@@ -251,6 +252,11 @@ func classify(tokens []string, project string) facts {
 			for _, goos := range embeddedOSes(token) {
 				f.oses = appendUnique(f.oses, goos)
 			}
+			// The project's own name explains itself, so it does not count
+			// against an asset the way an unexplained word does.
+			if slices.Contains(projectWords, token) {
+				continue
+			}
 			f.unrecognized++
 		}
 	}
@@ -259,8 +265,7 @@ func classify(tokens []string, project string) facts {
 
 // namesProject reports whether every word of the project name appears among an
 // asset's tokens, which is how "deno" is told apart from "denort".
-func namesProject(tokens []string, project string) bool {
-	words := tokenize(strings.ToLower(project))
+func namesProject(tokens, words []string) bool {
 	if len(words) == 0 {
 		return false
 	}

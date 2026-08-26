@@ -209,6 +209,14 @@ func namesArchExactly(stem, goarch string) bool {
 	return slices.Contains(tokenize(stem), goarch)
 }
 
+// plural renders a count's noun, so that a summary reads as a sentence.
+func plural(count int, noun string) string {
+	if count == 1 {
+		return noun
+	}
+	return noun + "s"
+}
+
 func boolRank(value bool) int {
 	if value {
 		return 1
@@ -304,7 +312,7 @@ func describe(oses, arches []string, f facts, kind format) string {
 		parts = append(parts, "executable")
 	}
 	if f.unrecognized > 0 {
-		parts = append(parts, fmt.Sprintf("%d unrecognised token(s)", f.unrecognized))
+		parts = append(parts, fmt.Sprintf("%d unrecognised %s", f.unrecognized, plural(f.unrecognized, "word")))
 	}
 	return strings.Join(parts, ", ")
 }

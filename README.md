@@ -4,7 +4,48 @@
 without calling `api.github.com`, avoiding rate-limits imposed on unauthenticated users.
 It can select several assets, verify their published checksums, and safely extract common archive formats.
 
-## Install
+## Install any tool from a GitHub release
+
+Name a repository. `ghget` works out which asset was built for this machine,
+verifies its published checksum, and leaves you with the program:
+
+```sh
+ghget astral-sh/uv --auto --install --dir ~/.local/bin
+```
+
+```text
+selected uv-x86_64-apple-darwin.tar.gz (darwin, amd64, tar.gz archive)
+downloaded uv-x86_64-apple-darwin.tar.gz.sha256
+downloaded uv-x86_64-apple-darwin.tar.gz
+verified uv-x86_64-apple-darwin.tar.gz
+installed ~/.local/bin/uv
+installed ~/.local/bin/uvx
+```
+
+No filename to look up, no naming convention to learn, and nothing left over:
+the archive's documentation, licences, and shell completions are discarded and
+only the executables are kept. The same two flags work whatever shape a project
+publishes its release in:
+
+```sh
+ghget BurntSushi/ripgrep --auto --install    # tarball beside docs    -> ./rg
+ghget cli/cli --auto --install               # ZIP with a bin/ prefix -> ./gh
+ghget kubernetes-sigs/kind --auto --install  # a bare binary          -> ./kind
+ghget denoland/deno --auto --install         # ZIP, not denort's      -> ./deno
+```
+
+`--auto` will not guess across platforms. An asset built for another operating
+system, architecture, or C library is rejected outright rather than ranked
+lower, and when two assets are equally good `ghget` prints both and stops
+instead of choosing for you. Selection is tested against release listings
+captured from a hundred of the most popular repositories on GitHub.
+
+The two flags are independent, and useful on their own: `--auto` selects the
+asset and downloads it as published, while `--install` takes the programs out of
+an asset you named yourself. [Automatic selection](#automatic-selection) and
+[Installing programs](#installing-programs) describe each in full.
+
+## Installing ghget
 
 Ready-to-use binaries are published on the
 [releases page](https://github.com/krisiasty/ghget/releases/latest). Download
@@ -189,22 +230,19 @@ wins when forced). Both `--flat` and `--keep` require `--extract`.
 
 ## Automatic selection
 
-`--auto` picks the asset built for the current machine, so a project's naming
-convention does not have to be known in advance:
-
-```sh
-ghget astral-sh/uv --auto
-```
-
 Selection reads each asset name rather than matching a list of known
-conventions. Assets naming a different operating system or architecture are
-rejected outright, as are checksum and signature sidecars, debugging symbols,
-`.deb`, `.rpm`, `.msi`, `.pkg`, `.dmg`, AppImage, and source archives. An asset
-naming no operating system is skipped when other assets in the release name
-theirs, so debug bundles and application packages are not mistaken for builds. Whatever survives is
-ranked, preferring a matching C library, an explicitly named architecture,
-fewer unrecognised words in the name, a bare executable over an archive, and
-the archive format conventional for the platform.
+conventions, of which there are too many to enumerate and which change without
+notice.
+
+Assets naming a different operating system or architecture are rejected
+outright, as are checksum and signature sidecars, debugging symbols, `.deb`,
+`.rpm`, `.msi`, `.pkg`, `.dmg`, AppImage, and source archives. An asset naming
+no operating system is skipped when other assets in the release name theirs, so
+debug bundles and application packages are not mistaken for builds. Whatever
+survives is ranked, preferring a matching C library, an explicitly named
+architecture, the asset carrying the project's own name, fewer unrecognised
+words, a bare executable over an archive, and the archive format conventional
+for the platform.
 
 On Linux, `--auto` prefers a glibc build, or a musl build on a musl host such as
 Alpine, detected from the loader in `/lib` or from `/etc/alpine-release`. A
@@ -230,16 +268,9 @@ Add `--extract` to unpack it in full, or `--install` to take just the programs.
 ## Installing programs
 
 `--install` writes only the executables an asset contains, discarding
-documentation, licences, manual pages, and shell completions:
-
-```sh
-ghget astral-sh/uv --auto --install --dir ~/.local/bin
-```
-
-That leaves `uv` and `uvx` in the destination and nothing else, even though the
-published archive stores them inside a `uv-x86_64-apple-darwin/` directory. The
-same command works for a project shipping a bare binary, an archive with a
-`bin/` prefix, or a binary sitting beside its documentation.
+documentation, licences, manual pages, and shell completions. `uv` and `uvx`
+land in the destination and nothing else, even though the published archive
+stores them inside a `uv-x86_64-apple-darwin/` directory.
 
 Programs are recognised by the target platform rather than by inspecting the
 archive: on Windows by the `.exe`, `.com`, `.bat`, or `.cmd` extension, because
