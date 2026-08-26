@@ -1,0 +1,9 @@
+code-server-4.134.0-amd64.rpm
+code-server-4.134.0-arm64.rpm
+code-server-4.134.0-linux-amd64.tar.gz
+code-server-4.134.0-linux-arm64.tar.gz
+code-server-4.134.0-macos-amd64.tar.gz
+code-server-4.134.0-macos-arm64.tar.gz
+code-server_4.134.0_amd64.deb
+code-server_4.134.0_arm64.deb
+package.tar.gz

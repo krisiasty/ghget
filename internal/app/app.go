@@ -199,7 +199,7 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 	}
 	var selectedNames []string
 	if opts.auto {
-		selected, err := a.autoSelect(ctx, assets, opts)
+		selected, err := a.autoSelect(ctx, assets, repo, opts)
 		if err != nil {
 			return err
 		}

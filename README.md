@@ -194,8 +194,10 @@ ghget astral-sh/uv --auto
 
 Selection reads each asset name rather than matching a list of known
 conventions. Assets naming a different operating system or architecture are
-rejected outright, as are checksum and signature sidecars, `.deb`, `.rpm`,
-`.msi`, `.pkg`, `.dmg`, AppImage, and source archives. Whatever survives is
+rejected outright, as are checksum and signature sidecars, debugging symbols,
+`.deb`, `.rpm`, `.msi`, `.pkg`, `.dmg`, AppImage, and source archives. An asset
+naming no operating system is skipped when other assets in the release name
+theirs, so debug bundles and application packages are not mistaken for builds. Whatever survives is
 ranked, preferring a matching C library, an explicitly named architecture,
 fewer unrecognised words in the name, a bare executable over an archive, and
 the archive format conventional for the platform.

@@ -1,0 +1,14 @@
+bwrap-linux-aarch64.gz
+bwrap-linux-x86_64.gz
+Zed-aarch64.dmg
+Zed-aarch64.exe
+zed-linux-aarch64.tar.gz
+zed-linux-x86_64.tar.gz
+zed-remote-server-linux-aarch64.gz
+zed-remote-server-linux-x86_64.gz
+zed-remote-server-macos-aarch64.gz
+zed-remote-server-macos-x86_64.gz
+zed-remote-server-windows-aarch64.zip
+zed-remote-server-windows-x86_64.zip
+Zed-x86_64.dmg
+Zed-x86_64.exe

@@ -122,6 +122,54 @@ func TestSelectCorpus(t *testing.T) {
 		{"sigstore_cosign", "darwin", "arm64", none, "cosign-darwin-arm64"},
 		{"sigstore_cosign", "windows", "amd64", none, "cosign-windows-amd64.exe"},
 
+		// denort and libdenort tie with deno on every other measure; the asset
+		// carrying the project's own name is the program that was asked for.
+		{"denoland_deno", "linux", "amd64", glibc, "deno-x86_64-unknown-linux-gnu.zip"},
+		{"denoland_deno", "darwin", "arm64", none, "deno-aarch64-apple-darwin.zip"},
+		{"denoland_deno", "windows", "amd64", none, "deno-x86_64-pc-windows-msvc.zip"},
+
+		// A .exe extension means Windows even when the name says nothing else.
+		{"zed-industries_zed", "linux", "amd64", glibc, "zed-linux-x86_64.tar.gz"},
+		{"zed-industries_zed", "windows", "amd64", none, "Zed-x86_64.exe"},
+		{"ytdl-org_youtube-dl", "windows", "amd64", none, "youtube-dl.exe"},
+		{"alacritty_alacritty", "windows", "amd64", none, "Alacritty-v0.17.0-portable.exe"},
+
+		// An "android" token rules an asset out on Linux, and Linux-64bit and
+		// linux-amd64 name the same build, so the canonical spelling wins.
+		{"oven-sh_bun", "linux", "amd64", glibc, "bun-linux-x64.zip"},
+		{"oven-sh_bun", "linux", "arm64", glibc, "bun-linux-aarch64.zip"},
+		{"oven-sh_bun", "darwin", "arm64", none, "bun-darwin-aarch64.zip"},
+		{"oven-sh_bun", "windows", "amd64", none, "bun-windows-x64.zip"},
+		{"gohugoio_hugo", "linux", "amd64", glibc, "hugo_0.165.0_linux-amd64.tar.gz"},
+		{"gohugoio_hugo", "linux", "arm64", glibc, "hugo_0.165.0_linux-arm64.tar.gz"},
+		{"gohugoio_hugo", "windows", "amd64", none, "hugo_0.165.0_windows-amd64.zip"},
+
+		// protoc spells architectures with an underscore before the word size.
+		{"protocolbuffers_protobuf", "linux", "amd64", glibc, "protoc-36.0-linux-x86_64.zip"},
+		{"protocolbuffers_protobuf", "linux", "386", glibc, "protoc-36.0-linux-x86_32.zip"},
+		{"protocolbuffers_protobuf", "linux", "arm64", glibc, "protoc-36.0-linux-aarch_64.zip"},
+		{"protocolbuffers_protobuf", "linux", "s390x", glibc, "protoc-36.0-linux-s390_64.zip"},
+		// A native build is preferred over the universal one.
+		{"protocolbuffers_protobuf", "darwin", "arm64", none, "protoc-36.0-osx-aarch_64.zip"},
+		{"protocolbuffers_protobuf", "windows", "amd64", none, "protoc-36.0-win64.zip"},
+
+		// An Electron app: .zip is the program, .appimage/.deb/.flatpak are not,
+		// and the plain .exe beats the NSIS installer beside it.
+		{"toeverything_AFFiNE", "linux", "amd64", glibc, "affine-0.27.4-stable-linux-x64.zip"},
+		{"toeverything_AFFiNE", "darwin", "arm64", none, "affine-0.27.4-stable-macos-arm64.zip"},
+		{"toeverything_AFFiNE", "windows", "amd64", none, "affine-0.27.4-stable-windows-x64.exe"},
+
+		{"coder_code-server", "linux", "amd64", glibc, "code-server-4.134.0-linux-amd64.tar.gz"},
+		{"coder_code-server", "darwin", "arm64", none, "code-server-4.134.0-macos-arm64.tar.gz"},
+		{"Genymobile_scrcpy", "linux", "amd64", glibc, "scrcpy-linux-x86_64-v4.1.tar.gz"},
+		{"Genymobile_scrcpy", "windows", "amd64", none, "scrcpy-win64-v4.1.zip"},
+
+		// A .app bundle is a macOS application whatever else the name says.
+		{"cline_cline", "darwin", "arm64", none, "Cline_0.0.17_universal.app.tar.gz"},
+
+		// The OS is glued into the product name rather than standing alone.
+		{"microsoft_terminal", "windows", "amd64", none, "Microsoft.WindowsTerminal_1.24.11911.0_x64.zip"},
+
 		// -rocm and -mlx accelerator builds are demoted below the plain build.
 		{"ollama_ollama", "linux", "amd64", glibc, "ollama-linux-amd64.tar.zst"},
 		{"ollama_ollama", "windows", "amd64", none, "ollama-windows-amd64.zip"},
@@ -134,7 +182,7 @@ func TestSelectCorpus(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			target := platform.Platform{OS: tt.goos, Arch: tt.goarch, Libc: tt.libc}
-			result, err := Select(loadFixture(t, tt.fixture), target)
+			result, err := Select(loadFixture(t, tt.fixture), target, projectOf(tt.fixture))
 			if err != nil {
 				t.Fatalf("Select() error = %v (ranked: %v)", err, viableNames(result))
 			}
@@ -147,9 +195,62 @@ func TestSelectCorpus(t *testing.T) {
 
 // TestSelectReportsNothingForUnpublishedPlatforms guards the other half of the
 // contract: silence is correct when a project ships no build for a platform.
+// TestSelectIgnoresUnlabelledAssetsInALabelledRelease covers the assets that
+// name an architecture but no operating system. PowerToys publishes debug
+// symbols as symbols-x64.zip, which must not be mistaken for a Linux build.
+func TestSelectIgnoresUnlabelledAssetsInALabelledRelease(t *testing.T) {
+	tests := []struct {
+		fixture string
+		project string
+		target  platform.Platform
+	}{
+		{"microsoft_PowerToys", "PowerToys", platform.Platform{OS: "linux", Arch: "amd64", Libc: glibc}},
+		{"microsoft_PowerToys", "PowerToys", platform.Platform{OS: "darwin", Arch: "arm64"}},
+		// A macOS .app bundle carries an architecture but no operating system.
+		{"unslothai_unsloth", "unsloth", platform.Platform{OS: "linux", Arch: "arm64", Libc: glibc}},
+		// A universal .app bundle names no OS and passes the architecture test.
+		{"cline_cline", "cline", platform.Platform{OS: "linux", Arch: "amd64", Libc: glibc}},
+		// OBS publishes a .dmg and a dSYMs bundle; neither is an installable program.
+		{"obsproject_obs-studio", "obs-studio", platform.Platform{OS: "darwin", Arch: "arm64"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.fixture+"/"+tt.target.OS+"_"+tt.target.Arch, func(t *testing.T) {
+			result, err := Select(loadFixture(t, tt.fixture), tt.target, tt.project)
+			if !errors.Is(err, ErrNoMatch) {
+				t.Fatalf("Select() = %q (err %v), want ErrNoMatch", result.Selected, err)
+			}
+		})
+	}
+}
+
+// A release that labels no operating system anywhere is taken at face value.
+func TestSelectAcceptsUnlabelledAssetsWhenNothingIsLabelled(t *testing.T) {
+	names := []string{"tool-amd64.tar.gz", "tool-arm64.tar.gz", "checksums.txt"}
+	result, err := Select(names, platform.Platform{OS: "linux", Arch: "amd64", Libc: glibc}, "tool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Selected != "tool-amd64.tar.gz" {
+		t.Fatalf("Select() = %q, want tool-amd64.tar.gz", result.Selected)
+	}
+}
+
+func TestSelectRejectsAnOSNamedInsideAWord(t *testing.T) {
+	// Windows Terminal spells its only platform inside "WindowsTerminal".
+	for _, target := range []platform.Platform{
+		{OS: "linux", Arch: "amd64", Libc: glibc},
+		{OS: "darwin", Arch: "arm64"},
+	} {
+		result, err := Select(loadFixture(t, "microsoft_terminal"), target, "terminal")
+		if !errors.Is(err, ErrNoMatch) {
+			t.Fatalf("Select(%s) = %q, want ErrNoMatch", target.OS, result.Selected)
+		}
+	}
+}
+
 func TestSelectReportsNothingForUnpublishedPlatforms(t *testing.T) {
 	// eza publishes no macOS build at all.
-	_, err := Select(loadFixture(t, "eza-community_eza"), platform.Platform{OS: "darwin", Arch: "arm64"})
+	_, err := Select(loadFixture(t, "eza-community_eza"), platform.Platform{OS: "darwin", Arch: "arm64"}, "eza")
 	if !errors.Is(err, ErrNoMatch) {
 		t.Fatalf("Select() error = %v, want ErrNoMatch", err)
 	}
@@ -158,7 +259,7 @@ func TestSelectReportsNothingForUnpublishedPlatforms(t *testing.T) {
 func TestSelectReportsAmbiguousCandidates(t *testing.T) {
 	// jq publishes the same macOS binary under both a macos and an osx name.
 	target := platform.Platform{OS: "darwin", Arch: "amd64", Libc: none}
-	result, err := Select(loadFixture(t, "jqlang_jq"), target)
+	result, err := Select(loadFixture(t, "jqlang_jq"), target, "jq")
 	var ambiguous *AmbiguousError
 	if !errors.As(err, &ambiguous) {
 		t.Fatalf("Select() error = %v, want *AmbiguousError (selected %q)", err, result.Selected)
@@ -179,7 +280,7 @@ func TestSelectReportsAmbiguousCandidates(t *testing.T) {
 func TestSelectReportsNoMatch(t *testing.T) {
 	// kind publishes nothing for s390x.
 	target := platform.Platform{OS: "linux", Arch: "s390x", Libc: glibc}
-	result, err := Select(loadFixture(t, "kubernetes-sigs_kind"), target)
+	result, err := Select(loadFixture(t, "kubernetes-sigs_kind"), target, "kind")
 	if !errors.Is(err, ErrNoMatch) {
 		t.Fatalf("Select() error = %v, want ErrNoMatch", err)
 	}
@@ -195,7 +296,7 @@ func TestSelectReportsNoMatch(t *testing.T) {
 
 func TestSelectRejectsForeignPlatformsAndSidecars(t *testing.T) {
 	target := platform.Platform{OS: "linux", Arch: "amd64", Libc: glibc}
-	result, err := Select(loadFixture(t, "junegunn_fzf"), target)
+	result, err := Select(loadFixture(t, "junegunn_fzf"), target, "fzf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,9 +313,14 @@ func TestSelectRejectsForeignPlatformsAndSidecars(t *testing.T) {
 }
 
 func TestSelectRejectsEmptyAssetList(t *testing.T) {
-	if _, err := Select(nil, platform.Platform{OS: "linux", Arch: "amd64", Libc: glibc}); !errors.Is(err, ErrNoMatch) {
+	if _, err := Select(nil, platform.Platform{OS: "linux", Arch: "amd64", Libc: glibc}, "tool"); !errors.Is(err, ErrNoMatch) {
 		t.Fatalf("Select() error = %v, want ErrNoMatch", err)
 	}
+}
+
+// projectOf derives the repository name from a fixture named owner_project.
+func projectOf(fixture string) string {
+	return fixture[strings.LastIndex(fixture, "_")+1:]
 }
 
 func loadFixture(t *testing.T, name string) []string {

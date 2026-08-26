@@ -1,0 +1,15 @@
+protobuf-36.0.bazel.tar.gz
+protobuf-36.0.bazel.tar.gz.intoto.jsonl
+protobuf-36.0.tar.gz
+protobuf-36.0.zip
+protoc-36.0-linux-aarch_64.zip
+protoc-36.0-linux-ppcle_64.zip
+protoc-36.0-linux-s390_64.zip
+protoc-36.0-linux-x86_32.zip
+protoc-36.0-linux-x86_64.zip
+protoc-36.0-osx-aarch_64.zip
+protoc-36.0-osx-universal_binary.zip
+protoc-36.0-osx-x86_64.zip
+protoc-36.0-win32.zip
+protoc-36.0-win64.zip
+tool_integrity.bzl

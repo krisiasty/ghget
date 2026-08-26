@@ -1,0 +1,14 @@
+OBS-Studio-32.2.2-macOS-Apple-dSYMs.tar.xz
+OBS-Studio-32.2.2-macOS-Apple.dmg
+OBS-Studio-32.2.2-macOS-Intel-dSYMs.tar.xz
+OBS-Studio-32.2.2-macOS-Intel.dmg
+OBS-Studio-32.2.2-Sources.tar.gz
+OBS-Studio-32.2.2-Ubuntu-24.04-x86_64-dbsym.ddeb
+OBS-Studio-32.2.2-Ubuntu-24.04-x86_64.deb
+OBS-Studio-32.2.2-Ubuntu-26.04-x86_64-dbsym.ddeb
+OBS-Studio-32.2.2-Ubuntu-26.04-x86_64.deb
+OBS-Studio-32.2.2-Windows-arm64-PDBs.zip
+OBS-Studio-32.2.2-Windows-arm64.zip
+OBS-Studio-32.2.2-Windows-x64-Installer.exe
+OBS-Studio-32.2.2-Windows-x64-PDBs.zip
+OBS-Studio-32.2.2-Windows-x64.zip

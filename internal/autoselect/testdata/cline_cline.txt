@@ -1,0 +1,4 @@
+Cline_0.0.17_universal.app.tar.gz
+Cline_0.0.17_universal.app.tar.gz.sig
+Cline_0.0.17_universal.dmg
+latest.json

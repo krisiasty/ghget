@@ -24,8 +24,9 @@ var osAliases = map[string]string{
 var archAliases = map[string]string{
 	"amd64": "amd64", "x86_64": "amd64", "x64": "amd64", "64bit": "amd64",
 	"386": "386", "i386": "386", "i686": "386", "x86": "386", "x32": "386",
-	"ia32": "386", "32bit": "386",
-	"arm64": "arm64", "aarch64": "arm64", "arm64e": "arm64",
+	"ia32": "386", "32bit": "386", "x86_32": "386",
+	"arm64": "arm64", "aarch64": "arm64", "arm64e": "arm64", "aarch_64": "arm64",
+	"ppcle_64": "ppc64le", "s390_64": "s390x",
 	"arm": "arm", "armv5": "arm", "armv6": "arm", "armv7": "arm",
 	"armv6l": "arm", "armv7l": "arm", "armhf": "arm", "armel": "arm",
 	"ppc64le": "ppc64le", "powerpc64le": "ppc64le", "ppc64el": "ppc64le",
@@ -58,10 +59,42 @@ var libcAliases = map[string]string{
 	"msvc": "msvc", "mingw": "gnu", "mingw64": "gnu",
 }
 
+// debugSymbolTokens name a bundle of debugging symbols published beside a
+// release. They carry a platform and an architecture but are not programs.
+var debugSymbolTokens = map[string]bool{
+	"dsym": true, "dsyms": true, "dbgsym": true, "dbsym": true,
+	"debuginfo": true, "symbols": true, "pdb": true,
+}
+
 // neutralTokens carry no platform meaning and should not count against a candidate.
 var neutralTokens = map[string]bool{
 	"unknown": true, "pc": true, "apple": true, "none": true, "portbld": true,
 	"exe": true, "bin": true,
+}
+
+// embeddedOSNames are operating systems long and distinctive enough to be
+// recognised inside a longer word, as in "WindowsTerminal". Short aliases such
+// as "win" or "mac" are deliberately absent: they occur inside ordinary words.
+var embeddedOSNames = []struct{ word, goos string }{
+	{"windows", "windows"},
+	{"darwin", "darwin"},
+	{"macos", "darwin"},
+	{"linux", "linux"},
+	{"freebsd", "freebsd"},
+	{"android", "android"},
+}
+
+// embeddedOSes reports every operating system spelled inside a longer token.
+// All of them are reported, so that a name covering two platforms at once is
+// treated as naming both rather than only the first.
+func embeddedOSes(token string) []string {
+	var found []string
+	for _, candidate := range embeddedOSNames {
+		if strings.Contains(token, candidate.word) {
+			found = appendUnique(found, candidate.goos)
+		}
+	}
+	return found
 }
 
 // numericToken matches the version fragments left behind after splitting on dots.
@@ -98,9 +131,21 @@ var excludedSuffixes = []string{
 	".sha256", ".sha512", ".sha1", ".md5", ".sha256sum", ".sha512sum", ".sum",
 	".asc", ".sig", ".minisig", ".pem", ".cert", ".crt", ".pub",
 	".json", ".jsonl", ".txt", ".md", ".yaml", ".yml", ".xml", ".html",
-	".deb", ".rpm", ".apk", ".msi", ".pkg", ".dmg", ".nupkg", ".snap", ".flatpak",
+	".deb", ".ddeb", ".udeb", ".rpm", ".apk", ".msi", ".pkg", ".dmg", ".nupkg", ".snap",
+	".flatpak", ".iso", ".run", ".blockmap", ".epub", ".pdf",
 	".appimage", ".zsync", ".sh", ".ps1", ".bat", ".cmd", ".sbom", ".spdx", ".sblob",
+	".bsdiff", ".patch", ".diff", ".jar", ".war", ".whl", ".gem", ".vsix", ".crx", ".xpi",
 }
+
+// windowsProgramSuffix is the extension that identifies a Windows program.
+// It is a platform statement in its own right: "Zed-x86_64.exe" names no
+// operating system, but it can only run on Windows.
+const windowsProgramSuffix = ".exe"
+
+// macOSBundleSuffix ends the name of a macOS application bundle. Like ".exe"
+// it states a platform on its own: "Cline_0.0.17_universal.app.tar.gz" names
+// no operating system, but a .app bundle runs only on macOS.
+const macOSBundleSuffix = ".app"
 
 // format describes the container an asset is published in.
 type format struct {
@@ -135,18 +180,24 @@ func excluded(lower string) (string, bool) {
 	return "", false
 }
 
-// tokenize splits an asset stem into lowercase tokens, rejoining the "x86" and
-// "64" halves that separator splitting would otherwise produce from "x86_64".
+// tokenize splits an asset stem into lowercase tokens, rejoining the halves
+// that separator splitting would otherwise produce from architectures written
+// with an internal separator, such as "x86_64" or protoc's "aarch_64".
+//
+// Only a pair that spells a known architecture is rejoined, so an ordinary
+// number following an ordinary word is left alone.
 func tokenize(stem string) []string {
 	fields := strings.FieldsFunc(stem, func(r rune) bool {
 		return r == '-' || r == '_' || r == '.' || r == '+' || r == '~'
 	})
 	tokens := make([]string, 0, len(fields))
 	for i := 0; i < len(fields); i++ {
-		if fields[i] == "x86" && i+1 < len(fields) && fields[i+1] == "64" {
-			tokens = append(tokens, "x86_64")
-			i++
-			continue
+		if i+1 < len(fields) {
+			if joined := fields[i] + "_" + fields[i+1]; archAliases[joined] != "" {
+				tokens = append(tokens, joined)
+				i++
+				continue
+			}
 		}
 		tokens = append(tokens, fields[i])
 	}
@@ -155,7 +206,9 @@ func tokenize(stem string) []string {
 
 // facts records what an asset name says about the platform it targets.
 type facts struct {
+	debugSymbols bool
 	oses         []string
+	projectMatch bool
 	arches       []string
 	universal    bool
 	implicitOS   string
@@ -164,10 +217,16 @@ type facts struct {
 	unrecognized int
 }
 
-// classify interprets each token of an asset stem.
-func classify(tokens []string) facts {
+// classify interprets each token of an asset stem. Tokens spelling the project
+// name are recorded, so that an asset carrying it can be told apart from the
+// helper programs a release often publishes alongside.
+func classify(tokens []string, project string) facts {
 	var f facts
+	f.projectMatch = namesProject(tokens, project)
 	for _, token := range tokens {
+		if debugSymbolTokens[token] {
+			f.debugSymbols = true
+		}
 		switch {
 		case osAliases[token] != "":
 			f.oses = appendUnique(f.oses, osAliases[token])
@@ -186,10 +245,31 @@ func classify(tokens []string) facts {
 				f.implicitOS, f.implicitArch = compound.goos, compound.goarch
 				continue
 			}
+			// A product name may spell its platform inside a longer word, as
+			// "WindowsTerminal" does. The token still names a product, so it
+			// remains unrecognised for ranking purposes.
+			for _, goos := range embeddedOSes(token) {
+				f.oses = appendUnique(f.oses, goos)
+			}
 			f.unrecognized++
 		}
 	}
 	return f
+}
+
+// namesProject reports whether every word of the project name appears among an
+// asset's tokens, which is how "deno" is told apart from "denort".
+func namesProject(tokens []string, project string) bool {
+	words := tokenize(strings.ToLower(project))
+	if len(words) == 0 {
+		return false
+	}
+	for _, word := range words {
+		if !slices.Contains(tokens, word) {
+			return false
+		}
+	}
+	return true
 }
 
 func appendUnique(values []string, value string) []string {

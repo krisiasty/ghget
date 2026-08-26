@@ -1,0 +1,6 @@
+latest.json
+Unsloth-Desktop-0_1_803_beta-ARM64.app.tar.gz
+Unsloth-Desktop-0_1_803_beta-Linux.AppImage
+Unsloth-Desktop-0_1_803_beta-MacOS.dmg
+Unsloth-Desktop-0_1_803_beta-Ubuntu.deb
+Unsloth-Desktop-0_1_803_beta-Windows.exe

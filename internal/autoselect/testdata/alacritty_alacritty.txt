@@ -1,0 +1,14 @@
+alacritty-bindings.5.gz
+alacritty-escapes.7.gz
+alacritty-msg.1.gz
+Alacritty-v0.17.0-installer.msi
+Alacritty-v0.17.0-portable.exe
+Alacritty-v0.17.0.dmg
+alacritty.1.gz
+alacritty.5.gz
+alacritty.bash
+Alacritty.desktop
+alacritty.fish
+alacritty.info
+Alacritty.svg
+_alacritty
