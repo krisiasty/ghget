@@ -1,0 +1,7 @@
+GroupPolicyTemplates_1.24.11911.0.zip
+Microsoft.Windows.Console.ConPTY.1.24.260710001.nupkg
+Microsoft.WindowsTerminal_1.24.11911.0_8wekyb3d8bbwe.msixbundle
+Microsoft.WindowsTerminal_1.24.11911.0_8wekyb3d8bbwe.msixbundle_Windows10_PreinstallKit.zip
+Microsoft.WindowsTerminal_1.24.11911.0_arm64.zip
+Microsoft.WindowsTerminal_1.24.11911.0_x64.zip
+Microsoft.WindowsTerminal_1.24.11911.0_x86.zip

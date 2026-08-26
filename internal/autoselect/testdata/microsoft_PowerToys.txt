@@ -1,0 +1,7 @@
+GroupPolicyObjectFiles-0.101.2362.0.zip
+PowerToysSetup-0.101.2362.0-arm64.exe
+PowerToysSetup-0.101.2362.0-x64.exe
+PowerToysUserSetup-0.101.2362.0-arm64.exe
+PowerToysUserSetup-0.101.2362.0-x64.exe
+symbols-arm64.zip
+symbols-x64.zip

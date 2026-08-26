@@ -63,15 +63,18 @@ func (r Result) Candidate(name string) (Candidate, bool) {
 	return Candidate{}, false
 }
 
-// Select chooses the asset built for target from names.
+// Select chooses the asset built for target from names. The project name is
+// the repository name, used to tell a release's own program apart from the
+// helpers published beside it.
 //
 // It returns ErrNoMatch when nothing targets the platform, and *AmbiguousError
 // when the best candidates are indistinguishable. Result is populated in every
 // case so callers can explain the outcome or override it.
-func Select(names []string, target platform.Platform) (Result, error) {
+func Select(names []string, target platform.Platform, project string) (Result, error) {
+	labelled := releaseLabelsOperatingSystems(names)
 	var result Result
 	for _, name := range names {
-		candidate, ok := evaluate(name, target)
+		candidate, ok := evaluate(name, target, project, labelled)
 		if !ok {
 			result.Rejected = append(result.Rejected, candidate)
 			continue
@@ -99,32 +102,71 @@ func Select(names []string, target platform.Platform) (Result, error) {
 }
 
 // evaluate decides whether one asset can run on target, and how well it fits.
-func evaluate(name string, target platform.Platform) (Candidate, bool) {
+// releaseLabelsOperatingSystems reports whether any asset in a release names
+// the platform it was built for. When one does, an asset that names only an
+// architecture is something else — debug symbols, a support bundle, an
+// application package — rather than a build for the unnamed platforms.
+func releaseLabelsOperatingSystems(names []string) bool {
+	for _, name := range names {
+		lower := strings.ToLower(name)
+		stem, kind := splitFormat(lower)
+		if !kind.archive && strings.HasSuffix(lower, windowsProgramSuffix) {
+			return true
+		}
+		if strings.HasSuffix(stem, macOSBundleSuffix) {
+			return true
+		}
+		if f := classify(tokenize(stem), ""); len(f.oses) > 0 || f.implicitOS != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func evaluate(name string, target platform.Platform, project string, labelled bool) (Candidate, bool) {
 	lower := strings.ToLower(name)
 	if suffix, ok := excluded(lower); ok {
 		return Candidate{Name: name, Reason: "not a program: " + suffix + " file"}, false
 	}
 	stem, kind := splitFormat(lower)
 	candidate := Candidate{Name: name, Archive: kind.archive, Extractable: !kind.archive || kind.extractable}
-	f := classify(tokenize(stem))
+	windowsProgram := !kind.archive && strings.HasSuffix(lower, windowsProgramSuffix)
+	f := classify(tokenize(stem), project)
+
+	if f.debugSymbols {
+		candidate.Reason = "not a program: debugging symbols"
+		return candidate, false
+	}
 
 	oses, arches := f.oses, f.arches
 	if len(oses) == 0 && f.implicitOS != "" {
 		oses = []string{f.implicitOS}
 	}
+	if len(oses) == 0 && windowsProgram {
+		oses = []string{"windows"}
+	}
+	if len(oses) == 0 && strings.HasSuffix(stem, macOSBundleSuffix) {
+		oses = []string{"darwin"}
+	}
 	if len(arches) == 0 && f.implicitArch != "" {
 		arches = []string{f.implicitArch}
 	}
-	if len(oses) > 0 && !slices.Contains(oses, target.OS) {
-		candidate.Reason = "built for " + strings.Join(oses, "/")
+	// Every platform an asset names must match. A name mentioning both "linux"
+	// and "android" is an Android build, not a Linux one.
+	if foreign, ok := mismatch(oses, target.OS); ok {
+		candidate.Reason = "built for " + foreign
 		return candidate, false
 	}
-	if len(arches) > 0 && !slices.Contains(arches, target.Arch) && !f.universal {
-		candidate.Reason = "built for " + strings.Join(arches, "/")
+	if foreign, ok := mismatch(arches, target.Arch); ok && !f.universal {
+		candidate.Reason = "built for " + foreign
 		return candidate, false
 	}
 	if len(oses) == 0 && len(arches) == 0 && !f.universal {
 		candidate.Reason = "names no operating system or architecture"
+		return candidate, false
+	}
+	if len(oses) == 0 && labelled {
+		candidate.Reason = "names no operating system, but this release labels them"
 		return candidate, false
 	}
 
@@ -139,12 +181,39 @@ func evaluate(name string, target platform.Platform) (Candidate, bool) {
 	// caller must be told about. A stable sort preserves it for ranking only.
 	candidate.rank = []int{
 		libcRank,
+		boolRank(len(oses) > 0),
 		rankArch(arches, f, target),
+		boolRank(f.projectMatch),
 		-f.unrecognized,
 		rankKind(kind),
 		rankFormat(kind, target),
+		boolRank(slices.Contains(f.arches, target.Arch) && namesArchExactly(stem, target.Arch)),
 	}
 	return candidate, true
+}
+
+// mismatch reports the first platform an asset names that the target is not.
+func mismatch(named []string, target string) (string, bool) {
+	for _, value := range named {
+		if value != target {
+			return strings.Join(named, "/"), true
+		}
+	}
+	return "", false
+}
+
+// namesArchExactly reports whether the architecture is spelled the canonical
+// way, which separates "linux-amd64" from the "Linux-64bit" copy of the same
+// build that some projects publish alongside it.
+func namesArchExactly(stem, goarch string) bool {
+	return slices.Contains(tokenize(stem), goarch)
+}
+
+func boolRank(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 // rankLibc scores the C library a Linux asset was built against, or the

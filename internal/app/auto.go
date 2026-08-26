@@ -17,12 +17,12 @@ import (
 //
 // An ambiguous or empty result is explained on stderr and then returned as an
 // error: downloading the wrong program is worse than asking which one to use.
-func (a *App) autoSelect(ctx context.Context, assets []gh.Asset, opts options) (string, error) {
+func (a *App) autoSelect(ctx context.Context, assets []gh.Asset, repo string, opts options) (string, error) {
 	names := make([]string, len(assets))
 	for i, asset := range assets {
 		names[i] = asset.Name
 	}
-	result, err := autoselect.Select(names, a.platform)
+	result, err := autoselect.Select(names, a.platform, repo)
 	a.debugSelection(ctx, result)
 
 	var ambiguous *autoselect.AmbiguousError

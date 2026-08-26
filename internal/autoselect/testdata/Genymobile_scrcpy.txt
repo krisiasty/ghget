@@ -1,0 +1,8 @@
+scrcpy-linux-x86_64-v4.1.tar.gz
+scrcpy-macos-aarch64-v4.1.tar.gz
+scrcpy-macos-x86_64-v4.1.tar.gz
+scrcpy-server-v4.1
+scrcpy-win32-v4.1.zip
+scrcpy-win64-v4.1.zip
+SHA256SUMS.txt
+SHA256SUMS.txt.asc
