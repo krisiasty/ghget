@@ -1,0 +1,183 @@
+# Alias                 Repository
+
+# Declarative continuous deployment for Kubernetes.
+argocd                  argoproj/argo-cd
+
+# A cat clone with wings.
+bat                     sharkdp/bat
+
+# Manage, store, and distribute sensitive data including secrets, certificates, and keys.
+bao                     openbao/openbao
+openbao                 openbao/openbao
+
+# Cloud native networking and network security.
+calicoctl               projectcalico/calico
+
+# Install, manage, and troubleshoot Kubernetes clusters running Cilium.
+cilium                  cilium/cilium-cli
+
+# Code signing and transparency for containers and binaries.
+cosign                  sigstore/cosign
+
+# Work with container registries from the command line.
+crane                   google/go-containerregistry
+
+# A top-like interface for container metrics.
+ctop                    bcicen/ctop
+
+# A modern runtime for JavaScript and TypeScript.
+deno                    denoland/deno
+
+# Explore each layer in a Docker image.
+dive                    wagoodman/dive
+
+# The official command-line interface for the DigitalOcean API.
+doctl                   digitalocean/doctl
+
+# Download release assets from GitHub.
+dra                     devmatteini/dra
+
+# The official command-line interface for Amazon EKS.
+eksctl                  eksctl-io/eksctl
+
+# A simple, fast, and user-friendly alternative to find.
+fd                      sharkdp/fd
+
+# An extensible continuous delivery solution for Kubernetes powered by GitOps Toolkit.
+flux                    fluxcd/flux2
+
+# A command-line fuzzy finder.
+fzf                     junegunn/fzf
+
+# GitHub's official command-line tool.
+gh                      cli/cli
+
+# The Kubernetes package manager.
+helm                    helm/helm
+
+# A fast and powerful log processor.
+hl                      pamburus/hl
+
+# An alternative watch command with history, diff view, JSONL logging, and change hooks.
+hwatch                  blacknon/hwatch
+
+# A command-line JSON processor.
+jq                      jqlang/jq
+
+# A helper for running k3s in Docker.
+k3d                     k3d-io/k3d
+
+# A modern load-testing tool using Go and JavaScript.
+k6                      grafana/k6
+
+# A Kubernetes command-line interface for managing clusters in style.
+k9s                     derailed/k9s
+
+# Run local Kubernetes clusters using Docker container nodes.
+kind                    kubernetes-sigs/kind
+
+# Find and install kubectl plugins.
+krew                    kubernetes-sigs/krew
+
+# A fast Kubernetes manifest validator with support for custom resources.
+kubeconform             yannh/kubeconform
+
+# Bootstrap Kubernetes clusters.
+# Disabled until ghget supports downloads from dl.k8s.io; tracked in issue #21.
+# kubeadm               kubernetes/kubernetes
+
+# Control Kubernetes clusters from the command line.
+# Disabled until ghget supports downloads from dl.k8s.io; tracked in issue #21.
+# kubectl               kubernetes/kubectl
+
+# Switch quickly between Kubernetes clusters and namespaces.
+kubectx                 ahmetb/kubectx
+kubens                  ahmetb/kubectx                 kubens
+
+# A Kubernetes credential plugin implementing Azure authentication.
+kubelogin               Azure/kubelogin
+
+# Customize Kubernetes YAML configurations.
+kustomize               kubernetes-sigs/kustomize
+
+# A terminal interface for managing Docker.
+lazydocker              jesseduffield/lazydocker
+
+# A horizontally scalable, highly available, multi-tenant log aggregation system inspired by Prometheus.
+logcli                  grafana/loki                   logcli
+loki                    grafana/loki
+
+# Run Kubernetes locally.
+minikube                kubernetes/minikube
+
+# A Docker-compatible command-line interface for containerd.
+nerdctl                 containerd/nerdctl
+
+# An open source, general-purpose policy engine.
+opa                     open-policy-agent/opa
+
+# An OCI registry client for managing artifacts, images, and packages.
+oras                    oras-project/oras
+
+# Manage cloud infrastructure declaratively with OpenTofu.
+opentofu                opentofu/opentofu
+tofu                    opentofu/opentofu
+
+# The Prometheus monitoring system and time-series database.
+prometheus              prometheus/prometheus
+promtool                prometheus/prometheus
+
+# Infrastructure as code in any programming language.
+# Disabled because the current GitHub release archive does not contain the Pulumi CLI.
+# pulumi                pulumi/pulumi
+
+# Rsync for cloud storage including Google Drive, S3, Dropbox, Azure, and many others.
+rclone                  rclone/rclone
+
+# Recursively search directories for regular expressions while respecting gitignore files.
+rg                      BurntSushi/ripgrep
+ripgrep                 BurntSushi/ripgrep
+
+# Easy and repeatable Kubernetes development.
+skaffold                GoogleContainerTools/skaffold
+
+# A simple and flexible tool for managing secrets.
+sops                    getsops/sops
+
+# Tail logs from multiple Kubernetes pods and containers.
+stern                   stern/stern
+
+# A modern Linux distribution built for Kubernetes.
+talosctl                siderolabs/talos
+
+# Safely and predictably create, change, and improve infrastructure.
+# Disabled until ghget supports releases.hashicorp.com; tracked in issue #22.
+# terraform             hashicorp/terraform
+
+# Generate documentation from Terraform modules in various formats.
+terraform-docs          terraform-docs/terraform-docs
+
+# Orchestrate OpenTofu and Terraform infrastructure as code at scale.
+terragrunt              gruntwork-io/terragrunt
+
+# A pluggable Terraform linter.
+tflint                  terraform-linters/tflint
+
+# Define development environments as code for microservice applications on Kubernetes.
+tilt                    tilt-dev/tilt
+
+# Find vulnerabilities, misconfigurations, secrets, and SBOMs in containers, Kubernetes, code, and clouds.
+trivy                   aquasecurity/trivy
+
+# An extremely fast Python package and project manager written in Rust.
+uv                      astral-sh/uv
+
+# A tool for secrets management, encryption as a service, and privileged access management.
+# Disabled until ghget supports releases.hashicorp.com; tracked in issue #22.
+# vault                 hashicorp/vault
+
+# Back up and migrate Kubernetes applications and their persistent volumes.
+velero                  velero-io/velero
+
+# A portable command-line YAML, JSON, XML, CSV, TOML, HCL, and properties processor.
+yq                      mikefarah/yq

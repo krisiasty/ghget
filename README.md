@@ -6,14 +6,16 @@ It can select several assets, verify their published checksums, and safely extra
 
 ## Install any tool from a GitHub release
 
-Name a repository. `ghget` works out which asset was built for this machine,
-verifies its published checksum, and leaves you with the program:
+Name a built-in tool alias or a repository. `ghget` resolves the repository,
+works out which asset was built for this machine, verifies its published
+checksum, and leaves you with the program:
 
 ```sh
-ghget astral-sh/uv --auto --install --dir ~/.local/bin
+ghget uv --auto --install --dir ~/.local/bin
 ```
 
 ```text
+resolved uv to astral-sh/uv
 selected uv-x86_64-apple-darwin.tar.gz (darwin, amd64, tar.gz archive)
 downloaded uv-x86_64-apple-darwin.tar.gz.sha256
 downloaded uv-x86_64-apple-darwin.tar.gz
@@ -101,6 +103,7 @@ the swap and restored if the download or checksum fails.
 
 ```text
 ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
+ghget NAME[@TAG] --auto [--install]
 ghget OWNER/REPO[@TAG] --auto [--install]
 ghget OWNER/REPO[@TAG] --list
 ghget OWNER/REPO --tag
@@ -227,6 +230,33 @@ directories stored in the archive and place every regular file directly in the
 destination directory. If flattened entries have the same filename, identical
 content is accepted while differing content requires `--force` (the later entry
 wins when forced). Both `--flat` and `--keep` require `--extract`.
+
+## Repository aliases
+
+A built-in repository alias lets common tools be named without remembering the
+GitHub owner:
+
+```sh
+ghget fd --auto --install
+```
+
+The resolved repository is always reported before release selection. Aliases
+are case-insensitive, accept an explicit tag such as `fd@v10.2.0`, and work with
+`--list` and `--tag` as well as `--auto`. An unknown alias stops with an error
+that asks for an explicit `OWNER/REPO`; ghget never guesses a repository.
+
+An alias may also provide an asset hint when one repository publishes separate
+tools. For example, `kubens` resolves to `ahmetb/kubectx` while still selecting
+the release asset whose product name is `kubens`.
+
+Explicit `OWNER/REPO` targets continue to bypass alias resolution. The curated
+registry and contribution format are documented in
+[`registry/README.md`](registry/README.md).
+
+An alias resolves a repository; it does not guarantee that the project attaches
+compatible binaries to GitHub releases. Projects that distribute binaries
+elsewhere still resolve correctly, but `--auto --install` reports that no
+matching release asset is available.
 
 ## Automatic selection
 

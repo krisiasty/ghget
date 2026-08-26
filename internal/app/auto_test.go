@@ -22,6 +22,64 @@ import (
 
 var linuxAMD64 = platform.Platform{OS: "linux", Arch: "amd64", Libc: platform.Glibc}
 
+func TestAutoInstallResolvesBuiltInRepositoryAlias(t *testing.T) {
+	client := &fakeClient{
+		tag:     "v1.0.0",
+		assets:  assetsNamed("fd-linux-amd64"),
+		content: map[string]string{"fd-linux-amd64": "program"},
+	}
+	directory := t.TempDir()
+	var stderr strings.Builder
+	app := newTestApp(client, io.Discard, &stderr, linuxAMD64)
+
+	if err := app.Run(context.Background(), []string{"fd", "--auto", "--install", "--dir", directory}); err != nil {
+		t.Fatal(err)
+	}
+
+	if client.resolvedOwner != "sharkdp" || client.resolvedProject != "fd" {
+		t.Fatalf("resolved repository = %s/%s, want sharkdp/fd", client.resolvedOwner, client.resolvedProject)
+	}
+	if content := readIfExists(t, filepath.Join(directory, "fd")); content != "program" {
+		t.Fatalf("installed content = %q, want the program", content)
+	}
+	if !strings.Contains(stderr.String(), "resolved fd to sharkdp/fd\n") {
+		t.Fatalf("stderr = %q, want it to report the resolved repository", stderr.String())
+	}
+}
+
+func TestAutoInstallUsesRepositoryAliasAssetHint(t *testing.T) {
+	kubectxArchive := tarGzip(t, map[string]tarEntry{
+		"kubectx": {mode: 0o755, content: "wrong program"},
+	})
+	kubensArchive := tarGzip(t, map[string]tarEntry{
+		"kubens": {mode: 0o755, content: "namespace switcher"},
+	})
+	client := &fakeClient{
+		tag: "v1.0.0",
+		assets: assetsNamed(
+			"kubectx_v1.0.0_linux_x86_64.tar.gz",
+			"kubens_v1.0.0_linux_x86_64.tar.gz",
+		),
+		content: map[string]string{
+			"kubectx_v1.0.0_linux_x86_64.tar.gz": kubectxArchive,
+			"kubens_v1.0.0_linux_x86_64.tar.gz":  kubensArchive,
+		},
+	}
+	directory := t.TempDir()
+	app := newTestApp(client, io.Discard, io.Discard, linuxAMD64)
+
+	if err := app.Run(context.Background(), []string{"kubens", "--auto", "--install", "--dir", directory}); err != nil {
+		t.Fatal(err)
+	}
+
+	if content := readIfExists(t, filepath.Join(directory, "kubens")); content != "namespace switcher" {
+		t.Fatalf("installed content = %q, want the kubens program", content)
+	}
+	if _, err := os.Stat(filepath.Join(directory, "kubectx")); !os.IsNotExist(err) {
+		t.Fatalf("os.Stat(kubectx) error = %v, want the program not to exist", err)
+	}
+}
+
 func TestAutoSelectsTheAssetForThisPlatform(t *testing.T) {
 	client := &fakeClient{
 		tag: "v1.0.0",
