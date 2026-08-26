@@ -791,20 +791,22 @@ func TestParseTarget(t *testing.T) {
 
 func TestResolveRepositoryAlias(t *testing.T) {
 	tests := []struct {
-		input     string
-		want      string
-		wantHint  string
-		aliased   bool
-		wantError string
+		input      string
+		want       string
+		wantHint   string
+		wantSource string
+		aliased    bool
+		wantError  string
 	}{
 		{input: "fd", want: "sharkdp/fd", aliased: true},
 		{input: "FD@v10.2.0", want: "sharkdp/fd@v10.2.0", aliased: true},
 		{input: "kubens", want: "ahmetb/kubectx", wantHint: "kubens", aliased: true},
+		{input: "kubectl", want: "kubernetes/kubectl", wantHint: "kubectl", wantSource: "kubernetes", aliased: true},
 		{input: "owner/repo", want: "owner/repo"},
 		{input: "unknown", wantError: "unknown repository alias"},
 	}
 	for _, test := range tests {
-		resolved, assetHint, aliased, err := resolveRepositoryAlias(test.input)
+		resolved, err := resolveRepositoryAlias(test.input)
 		if test.wantError != "" {
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("resolveRepositoryAlias(%q) error = %v, want %q", test.input, err, test.wantError)
@@ -814,15 +816,15 @@ func TestResolveRepositoryAlias(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if resolved != test.want || assetHint != test.wantHint || aliased != test.aliased {
+		if resolved.target != test.want || resolved.assetHint != test.wantHint ||
+			resolved.backend != test.wantSource || resolved.aliased != test.aliased {
 			t.Fatalf(
-				"resolveRepositoryAlias(%q) = %q, %q, %v, want %q, %q, %v",
+				"resolveRepositoryAlias(%q) = %#v, want target %q, hint %q, backend %q, aliased %v",
 				test.input,
 				resolved,
-				assetHint,
-				aliased,
 				test.want,
 				test.wantHint,
+				test.wantSource,
 				test.aliased,
 			)
 		}

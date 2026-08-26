@@ -2,7 +2,7 @@
 
 This directory holds the source registry for ghget's built-in repository
 aliases. Each non-comment line in `aliases.tsv` contains an alias followed by
-an `OWNER/REPO` value and an optional asset hint.
+an `OWNER/REPO` value, an optional asset hint, and an optional source backend.
 
 Any non-empty run of whitespace may separate the fields:
 
@@ -10,11 +10,17 @@ Any non-empty run of whitespace may separate the fields:
 fd      sharkdp/fd
 rg      BurntSushi/ripgrep
 kubens  ahmetb/kubectx  kubens
+kubectl kubernetes/kubectl kubectl kubernetes
 ```
 
 The asset hint identifies the requested program when one repository publishes
 separate release assets for several tools. Without it, automatic selection uses
 the repository name as before.
+
+The backend selects a trusted download source other than GitHub Releases. A
+backend entry must also provide an asset hint, which identifies the artifact at
+that source. Backend names are compiled into ghget; registry data cannot provide
+an arbitrary download URL.
 
 Aliases are case-insensitive and must be unique. Blank lines and lines whose
 first non-whitespace character is `#` are ignored.

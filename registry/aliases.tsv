@@ -1,4 +1,4 @@
-# Alias                 Repository
+# Alias                 Repository                       Asset hint             Backend
 
 # Declarative continuous deployment for Kubernetes.
 argocd                  argoproj/argo-cd
@@ -83,12 +83,10 @@ krew                    kubernetes-sigs/krew
 kubeconform             yannh/kubeconform
 
 # Bootstrap Kubernetes clusters.
-# Disabled until ghget supports downloads from dl.k8s.io; tracked in issue #21.
-# kubeadm               kubernetes/kubernetes
+kubeadm                 kubernetes/kubernetes           kubeadm                 kubernetes
 
 # Control Kubernetes clusters from the command line.
-# Disabled until ghget supports downloads from dl.k8s.io; tracked in issue #21.
-# kubectl               kubernetes/kubectl
+kubectl                 kubernetes/kubectl              kubectl                 kubernetes
 
 # Switch quickly between Kubernetes clusters and namespaces.
 kubectx                 ahmetb/kubectx

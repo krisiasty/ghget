@@ -25,6 +25,7 @@ import (
 	"github.com/krisiasty/ghget/internal/matcher"
 	"github.com/krisiasty/ghget/internal/platform"
 	"github.com/krisiasty/ghget/internal/repoalias"
+	"github.com/krisiasty/ghget/internal/source"
 	"github.com/krisiasty/ghget/internal/tagorder"
 )
 
@@ -77,6 +78,7 @@ type releaseClient interface {
 // App coordinates release discovery, verification, downloads, and extraction.
 type App struct {
 	client       releaseClient
+	backends     map[string]source.Backend
 	stdout       io.Writer
 	stderr       io.Writer
 	unquarantine func(context.Context, []string) error
@@ -91,6 +93,7 @@ type App struct {
 func New(httpClient *http.Client, stdout, stderr io.Writer) *App {
 	return &App{
 		client:       gh.NewClient(httpClient),
+		backends:     defaultBackends(httpClient),
 		stdout:       stdout,
 		stderr:       stderr,
 		unquarantine: unquarantine,
@@ -104,6 +107,7 @@ func New(httpClient *http.Client, stdout, stderr io.Writer) *App {
 func NewWithClient(client releaseClient, stdout, stderr io.Writer) *App {
 	return &App{
 		client:         client,
+		backends:       defaultBackends(nil),
 		stdout:         stdout,
 		stderr:         stderr,
 		unquarantine:   unquarantine,
@@ -131,6 +135,11 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		if client, ok := a.client.(interface{ SetLogger(*slog.Logger) }); ok {
 			client.SetLogger(a.logger)
 		}
+		for _, backend := range a.backends {
+			if client, ok := backend.(interface{ SetLogger(*slog.Logger) }); ok {
+				client.SetLogger(a.logger)
+			}
+		}
 		a.logger.DebugContext(ctx, "debug telemetry enabled")
 	}
 	if opts.upgrade {
@@ -141,16 +150,30 @@ func (a *App) Run(ctx context.Context, args []string) error {
 
 // fetch resolves the release, selects assets, and downloads or extracts them.
 func (a *App) fetch(ctx context.Context, opts options) error {
-	target, assetHint, aliased, err := resolveRepositoryAlias(opts.target)
+	resolution, err := resolveRepositoryAlias(opts.target)
 	if err != nil {
 		return err
 	}
-	if aliased {
-		_, _ = fmt.Fprintf(a.stderr, "resolved %s to %s\n", opts.target, target)
+	if resolution.aliased {
+		_, _ = fmt.Fprintf(a.stderr, "resolved %s to %s\n", opts.target, resolution.target)
 	}
-	owner, repo, pattern, tag, err := parseTarget(target)
+	owner, repo, pattern, tag, err := parseTarget(resolution.target)
 	if err != nil {
 		return err
+	}
+	backend, err := a.backend(resolution.backend)
+	if err != nil {
+		return err
+	}
+	artifact := repo
+	if resolution.assetHint != "" {
+		artifact = resolution.assetHint
+	}
+	sourceTarget := source.Target{
+		Owner:      owner,
+		Repository: repo,
+		Artifact:   artifact,
+		Platform:   a.platform,
 	}
 
 	if opts.listTags {
@@ -159,7 +182,7 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 		}
 		started := time.Now()
 		a.debug(ctx, "listing release tags", "owner", owner, "repo", repo)
-		tags, err := a.client.ListTags(ctx, owner, repo)
+		tags, err := backend.ListTags(ctx, sourceTarget)
 		if err != nil {
 			return err
 		}
@@ -173,12 +196,12 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 		return nil
 	}
 	if tag == "latest" {
-		tag, err = a.client.ResolveLatest(ctx, owner, repo)
+		tag, err = backend.ResolveLatest(ctx, sourceTarget)
 		if err != nil {
 			return err
 		}
 	}
-	assets, err := a.client.ListAssets(ctx, owner, repo, tag)
+	assets, err := backend.ListAssets(ctx, sourceTarget, tag)
 	if err != nil {
 		return err
 	}
@@ -201,18 +224,14 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 	}
 
 	names := make([]string, len(assets))
-	byName := make(map[string]gh.Asset, len(assets))
+	byName := make(map[string]source.Asset, len(assets))
 	for i, asset := range assets {
 		names[i] = asset.Name
 		byName[asset.Name] = asset
 	}
 	var selectedNames []string
 	if opts.auto {
-		selectionProject := repo
-		if assetHint != "" {
-			selectionProject = assetHint
-		}
-		selected, err := a.autoSelect(ctx, assets, selectionProject, opts)
+		selected, err := a.autoSelect(ctx, assets, artifact, opts)
 		if err != nil {
 			return err
 		}
@@ -236,8 +255,11 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 		return fmt.Errorf("--output requires exactly one matching asset (matched %d)", len(selectedNames))
 	}
 
-	verification, err := a.checksums(ctx, assets, selectedNames, opts.checksum)
+	verification, err := a.checksums(ctx, backend, assets, selectedNames, opts.checksum)
 	if err != nil {
+		return err
+	}
+	if err := requireChecksums(selectedNames, byName, verification); err != nil {
 		return err
 	}
 	// Release artifacts are user-facing files and should remain accessible under the user's umask.
@@ -255,7 +277,7 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 		if skip[name] {
 			continue
 		}
-		paths, err := a.downloadOne(ctx, byName[name], opts, verification)
+		paths, err := a.downloadOne(ctx, backend, byName[name], opts, verification)
 		if err != nil {
 			return err
 		}
@@ -473,7 +495,12 @@ func escapeGlob(value string) string {
 	return escaped.String()
 }
 
-func (a *App) checkExistingDownloads(selected []string, assets map[string]gh.Asset, opts options, verification verificationData) (map[string]bool, error) {
+func (a *App) checkExistingDownloads(
+	selected []string,
+	assets map[string]source.Asset,
+	opts options,
+	verification verificationData,
+) (map[string]bool, error) {
 	skip := make(map[string]bool)
 	if opts.extract || opts.force {
 		return skip, nil
@@ -523,10 +550,33 @@ type verificationData struct {
 	verifyAll bool
 }
 
-func (a *App) checksums(ctx context.Context, assets []gh.Asset, selected []string, provided string) (verificationData, error) {
+func requireChecksums(selected []string, assets map[string]source.Asset, verification verificationData) error {
+	for _, name := range selected {
+		if !assets[name].ChecksumRequired || verification.verify[name] {
+			continue
+		}
+		return fmt.Errorf("required checksum is unavailable for %s", name)
+	}
+	return nil
+}
+
+func (a *App) checksums(
+	ctx context.Context,
+	backend source.Backend,
+	assets []source.Asset,
+	selected []string,
+	provided string,
+) (verificationData, error) {
+	var providedEntries []checksum.Entry
 	if provided != "" {
-		entries, err := checksum.ParseValueOrFile(provided)
-		return verificationData{entries: entries, verifyAll: true}, err
+		var err error
+		providedEntries, err = checksum.ParseValueOrFile(provided)
+		if err != nil {
+			return verificationData{}, err
+		}
+		if !requiresSourceChecksum(assets, selected) {
+			return verificationData{entries: providedEntries, verifyAll: true}, nil
+		}
 	}
 	data := verificationData{fetched: make(map[string][]byte), verify: make(map[string]bool)}
 	wanted := make(map[string]bool, len(selected))
@@ -535,7 +585,7 @@ func (a *App) checksums(ctx context.Context, assets []gh.Asset, selected []strin
 			wanted[name] = true
 		}
 	}
-	sources := make([]gh.Asset, 0)
+	sources := make([]source.Asset, 0)
 	sourceNames := make([]string, 0)
 	for _, asset := range assets {
 		if !checksum.IsChecksumAsset(asset.Name) {
@@ -551,7 +601,7 @@ func (a *App) checksums(ctx context.Context, assets []gh.Asset, selected []strin
 
 	entries := make([]checksum.Entry, 0)
 	for _, asset := range sources {
-		body, _, err := a.client.Download(ctx, asset)
+		body, _, err := backend.Download(ctx, asset)
 		if err != nil {
 			return data, fmt.Errorf("download checksum asset: %w", err)
 		}
@@ -586,7 +636,7 @@ func (a *App) checksums(ctx context.Context, assets []gh.Asset, selected []strin
 			continue
 		}
 		asset := findAsset(assets, name)
-		if asset.Digest == "" {
+		if asset.ChecksumRequired || asset.Digest == "" {
 			continue
 		}
 		data.entries = append(data.entries, checksum.Entry{Filename: name, Digest: asset.Digest})
@@ -596,26 +646,47 @@ func (a *App) checksums(ctx context.Context, assets []gh.Asset, selected []strin
 	if len(fallbackNames) > 0 {
 		a.debug(ctx, "using GitHub-generated checksum fallback", "asset_count", len(fallbackNames), "assets", fallbackNames)
 	}
+	data.entries = append(data.entries, providedEntries...)
+	data.verifyAll = len(providedEntries) > 0
 	return data, nil
 }
 
-func findAsset(assets []gh.Asset, name string) gh.Asset {
+func requiresSourceChecksum(assets []source.Asset, selected []string) bool {
+	wanted := make(map[string]struct{}, len(selected))
+	for _, name := range selected {
+		wanted[name] = struct{}{}
+	}
+	for _, asset := range assets {
+		if _, selected := wanted[asset.Name]; selected && asset.ChecksumRequired {
+			return true
+		}
+	}
+	return false
+}
+
+func findAsset(assets []source.Asset, name string) source.Asset {
 	for _, asset := range assets {
 		if asset.Name == name {
 			return asset
 		}
 	}
-	return gh.Asset{}
+	return source.Asset{}
 }
 
-func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, verification verificationData) ([]string, error) {
+func (a *App) downloadOne(
+	ctx context.Context,
+	backend source.Backend,
+	asset source.Asset,
+	opts options,
+	verification verificationData,
+) ([]string, error) {
 	var body io.ReadCloser
 	downloaded := false
 	if content, ok := verification.fetched[asset.Name]; ok {
 		body = io.NopCloser(bytes.NewReader(content))
 	} else {
 		var err error
-		body, _, err = a.client.Download(ctx, asset)
+		body, _, err = backend.Download(ctx, asset)
 		if err != nil {
 			return nil, err
 		}
@@ -709,7 +780,7 @@ func (a *App) downloadOne(ctx context.Context, asset gh.Asset, opts options, ver
 	return []string{destination}, nil
 }
 
-func downloadDisplayPath(asset gh.Asset, opts options) string {
+func downloadDisplayPath(asset source.Asset, opts options) string {
 	// An installed asset is unpacked from a temporary file, so naming a
 	// destination path here would point at a file that never appears.
 	if opts.install && !opts.keep {
@@ -775,7 +846,7 @@ func saveTemporaryFile(tmpPath, destination string, force bool) error {
 	return os.Rename(tmpPath, destination)
 }
 
-func downloadDestination(asset gh.Asset, opts options) (string, error) {
+func downloadDestination(asset source.Asset, opts options) (string, error) {
 	if opts.output != "" {
 		return outputPath(opts)
 	}
@@ -806,7 +877,7 @@ func destinationDirectories(opts options) []string {
 // temporaryDirectory returns the directory holding the in-progress download.
 // It must sit on the destination's filesystem, because the file is moved into
 // place with a rename.
-func temporaryDirectory(asset gh.Asset, opts options) string {
+func temporaryDirectory(asset source.Asset, opts options) string {
 	if opts.extract {
 		return opts.directory
 	}
@@ -830,11 +901,18 @@ func outputPath(opts options) (string, error) {
 	return filepath.Join(opts.directory, output), nil
 }
 
+type repositoryResolution struct {
+	target    string
+	assetHint string
+	backend   string
+	aliased   bool
+}
+
 // resolveRepositoryAlias expands a bare built-in alias while leaving an
 // explicit OWNER/REPO target unchanged. A tag suffix is carried across.
-func resolveRepositoryAlias(target string) (string, string, bool, error) {
+func resolveRepositoryAlias(target string) (repositoryResolution, error) {
 	if strings.Contains(target, "/") {
-		return target, "", false, nil
+		return repositoryResolution{target: target}, nil
 	}
 	alias := target
 	suffix := ""
@@ -843,12 +921,17 @@ func resolveRepositoryAlias(target string) (string, string, bool, error) {
 	}
 	entry, found, err := repoalias.Lookup(alias)
 	if err != nil {
-		return "", "", false, fmt.Errorf("resolve repository alias: %w", err)
+		return repositoryResolution{}, fmt.Errorf("resolve repository alias: %w", err)
 	}
 	if !found {
-		return "", "", false, fmt.Errorf("unknown repository alias %q; use OWNER/REPO", alias)
+		return repositoryResolution{}, fmt.Errorf("unknown repository alias %q; use OWNER/REPO", alias)
 	}
-	return entry.Repository + suffix, entry.AssetHint, true, nil
+	return repositoryResolution{
+		target:    entry.Repository + suffix,
+		assetHint: entry.AssetHint,
+		backend:   entry.Backend,
+		aliased:   true,
+	}, nil
 }
 
 func parseTarget(target string) (owner, repo, pattern, tag string, err error) {
