@@ -89,7 +89,10 @@ func (a *App) debugSelection(ctx context.Context, result autoselect.Result) {
 // installAsset places the programs a downloaded asset contains into the
 // destination directory, discarding documentation and other archive contents.
 func (a *App) installAsset(downloaded string, asset gh.Asset, opts options) ([]string, error) {
-	staging, err := os.MkdirTemp("", "ghget-install-")
+	// The downloaded file is created on the destination filesystem so it can be
+	// moved atomically. Keep staging there too: renaming a bare binary into the
+	// system temporary directory fails with EXDEV when the filesystems differ.
+	staging, err := os.MkdirTemp(filepath.Dir(downloaded), ".ghget-install-")
 	if err != nil {
 		return nil, fmt.Errorf("create staging directory: %w", err)
 	}

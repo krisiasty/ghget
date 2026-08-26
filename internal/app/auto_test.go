@@ -119,6 +119,36 @@ func TestAutoInstallNamesABareBinaryAfterItsProgram(t *testing.T) {
 	}
 }
 
+func TestInstallBareBinaryDoesNotUseSystemTemp(t *testing.T) {
+	downloadDirectory := t.TempDir()
+	downloaded := filepath.Join(downloadDirectory, ".ghget-download")
+	if err := os.WriteFile(downloaded, []byte("program"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(downloadDirectory, "bin")
+
+	missingTemp := filepath.Join(t.TempDir(), "missing")
+	t.Setenv("TMPDIR", missingTemp)
+	t.Setenv("TMP", missingTemp)
+	t.Setenv("TEMP", missingTemp)
+	if filepath.Clean(os.TempDir()) != filepath.Clean(missingTemp) {
+		t.Skipf("cannot redirect the system temporary directory on %s", runtime.GOOS)
+	}
+
+	app := newTestApp(&fakeClient{}, io.Discard, io.Discard, linuxAMD64)
+	paths, err := app.installAsset(downloaded, gh.Asset{Name: "tool-linux-amd64"}, options{directory: destination})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(destination, "tool")
+	if len(paths) != 1 || paths[0] != want {
+		t.Fatalf("installAsset() = %v, want [%s]", paths, want)
+	}
+	if content := readIfExists(t, want); content != "program" {
+		t.Fatalf("installed content = %q, want the program", content)
+	}
+}
+
 func TestAutoInstallKeepsTheArchiveWhenAsked(t *testing.T) {
 	archive := tarGzip(t, map[string]tarEntry{"tool": {mode: 0o755, content: "program"}})
 	client := &fakeClient{
