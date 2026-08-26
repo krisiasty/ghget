@@ -52,6 +52,9 @@ gh                      cli/cli
 # The Kubernetes package manager.
 helm                    helm/helm
 
+# A fast and powerful log processor.
+hl                      pamburus/hl
+
 # An alternative watch command with history, diff view, JSONL logging, and change hooks.
 hwatch                  blacknon/hwatch
 
@@ -77,10 +80,12 @@ krew                    kubernetes-sigs/krew
 kubeconform             yannh/kubeconform
 
 # Bootstrap Kubernetes clusters.
-kubeadm                 kubernetes/kubernetes
+# Disabled until ghget supports downloads from dl.k8s.io; tracked in issue #21.
+# kubeadm               kubernetes/kubernetes
 
 # Control Kubernetes clusters from the command line.
-kubectl                 kubernetes/kubectl
+# Disabled until ghget supports downloads from dl.k8s.io; tracked in issue #21.
+# kubectl               kubernetes/kubectl
 
 # Switch quickly between Kubernetes clusters and namespaces.
 kubectx                 ahmetb/kubectx
@@ -120,7 +125,8 @@ prometheus              prometheus/prometheus
 promtool                prometheus/prometheus
 
 # Infrastructure as code in any programming language.
-pulumi                  pulumi/pulumi
+# Disabled because the current GitHub release archive does not contain the Pulumi CLI.
+# pulumi                pulumi/pulumi
 
 # Rsync for cloud storage including Google Drive, S3, Dropbox, Azure, and many others.
 rclone                  rclone/rclone
@@ -142,7 +148,8 @@ stern                   stern/stern
 talosctl                siderolabs/talos
 
 # Safely and predictably create, change, and improve infrastructure.
-terraform               hashicorp/terraform
+# Disabled until ghget supports releases.hashicorp.com; tracked in issue #22.
+# terraform             hashicorp/terraform
 
 # Generate documentation from Terraform modules in various formats.
 terraform-docs          terraform-docs/terraform-docs
@@ -163,7 +170,8 @@ trivy                   aquasecurity/trivy
 uv                      astral-sh/uv
 
 # A tool for secrets management, encryption as a service, and privileged access management.
-vault                   hashicorp/vault
+# Disabled until ghget supports releases.hashicorp.com; tracked in issue #22.
+# vault                 hashicorp/vault
 
 # Back up and migrate Kubernetes applications and their persistent volumes.
 velero                  velero-io/velero

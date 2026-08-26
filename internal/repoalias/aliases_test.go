@@ -78,16 +78,13 @@ func TestPopularDevOpsAliases(t *testing.T) {
 	tests := []Entry{
 		{Alias: "calicoctl", Repository: "projectcalico/calico"},
 		{Alias: "helm", Repository: "helm/helm"},
+		{Alias: "hl", Repository: "pamburus/hl"},
 		{Alias: "hwatch", Repository: "blacknon/hwatch"},
 		{Alias: "jq", Repository: "jqlang/jq"},
 		{Alias: "k9s", Repository: "derailed/k9s"},
-		{Alias: "kubeadm", Repository: "kubernetes/kubernetes"},
-		{Alias: "kubectl", Repository: "kubernetes/kubectl"},
 		{Alias: "openbao", Repository: "openbao/openbao"},
 		{Alias: "opentofu", Repository: "opentofu/opentofu"},
 		{Alias: "rclone", Repository: "rclone/rclone"},
-		{Alias: "terraform", Repository: "hashicorp/terraform"},
-		{Alias: "vault", Repository: "hashicorp/vault"},
 	}
 	for _, test := range tests {
 		entry, found, err := Lookup(test.Alias)
@@ -101,7 +98,9 @@ func TestPopularDevOpsAliases(t *testing.T) {
 }
 
 func TestUnsupportedToolsAreNotAliased(t *testing.T) {
-	for _, alias := range []string{"aws", "awscli", "az", "azure-cli", "hf"} {
+	for _, alias := range []string{
+		"aws", "awscli", "az", "azure-cli", "hf", "kubeadm", "kubectl", "pulumi", "terraform", "vault",
+	} {
 		entry, found, err := Lookup(alias)
 		if err != nil {
 			t.Fatal(err)

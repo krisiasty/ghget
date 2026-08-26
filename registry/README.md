@@ -23,6 +23,11 @@ Each tool group must have a one-line comment describing the project. When a
 tool has multiple common executable names, put its aliases together below a
 single description.
 
+Keep tools that require an unsupported download backend as commented entries.
+Add a nearby comment explaining why they are disabled and link the tracking
+issue when one exists. Commented entries are excluded from the embedded
+registry.
+
 After editing the registry, regenerate its compressed embedded form:
 
 ```sh
