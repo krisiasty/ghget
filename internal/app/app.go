@@ -141,7 +141,7 @@ func (a *App) Run(ctx context.Context, args []string) error {
 
 // fetch resolves the release, selects assets, and downloads or extracts them.
 func (a *App) fetch(ctx context.Context, opts options) error {
-	target, aliased, err := resolveRepositoryAlias(opts.target)
+	target, assetHint, aliased, err := resolveRepositoryAlias(opts.target)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,11 @@ func (a *App) fetch(ctx context.Context, opts options) error {
 	}
 	var selectedNames []string
 	if opts.auto {
-		selected, err := a.autoSelect(ctx, assets, repo, opts)
+		selectionProject := repo
+		if assetHint != "" {
+			selectionProject = assetHint
+		}
+		selected, err := a.autoSelect(ctx, assets, selectionProject, opts)
 		if err != nil {
 			return err
 		}
@@ -828,23 +832,23 @@ func outputPath(opts options) (string, error) {
 
 // resolveRepositoryAlias expands a bare built-in alias while leaving an
 // explicit OWNER/REPO target unchanged. A tag suffix is carried across.
-func resolveRepositoryAlias(target string) (string, bool, error) {
+func resolveRepositoryAlias(target string) (string, string, bool, error) {
 	if strings.Contains(target, "/") {
-		return target, false, nil
+		return target, "", false, nil
 	}
 	alias := target
 	suffix := ""
 	if at := strings.LastIndex(alias, "@"); at >= 0 {
 		alias, suffix = alias[:at], alias[at:]
 	}
-	repository, found, err := repoalias.Lookup(alias)
+	entry, found, err := repoalias.Lookup(alias)
 	if err != nil {
-		return "", false, fmt.Errorf("resolve repository alias: %w", err)
+		return "", "", false, fmt.Errorf("resolve repository alias: %w", err)
 	}
 	if !found {
-		return "", false, fmt.Errorf("unknown repository alias %q; use OWNER/REPO", alias)
+		return "", "", false, fmt.Errorf("unknown repository alias %q; use OWNER/REPO", alias)
 	}
-	return repository + suffix, true, nil
+	return entry.Repository + suffix, entry.AssetHint, true, nil
 }
 
 func parseTarget(target string) (owner, repo, pattern, tag string, err error) {

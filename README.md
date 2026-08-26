@@ -245,6 +245,10 @@ are case-insensitive, accept an explicit tag such as `fd@v10.2.0`, and work with
 `--list` and `--tag` as well as `--auto`. An unknown alias stops with an error
 that asks for an explicit `OWNER/REPO`; ghget never guesses a repository.
 
+An alias may also provide an asset hint when one repository publishes separate
+tools. For example, `kubens` resolves to `ahmetb/kubectx` while still selecting
+the release asset whose product name is `kubens`.
+
 Explicit `OWNER/REPO` targets continue to bypass alias resolution. The curated
 registry and contribution format are documented in
 [`registry/README.md`](registry/README.md).

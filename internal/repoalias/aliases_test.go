@@ -8,13 +8,14 @@ import (
 )
 
 func TestParseAcceptsRunsOfWhitespace(t *testing.T) {
-	input := "  # aliases\n\nFD\tsharkdp/fd\nrg       BurntSushi/ripgrep\nuv\t  astral-sh/uv\n"
+	input := "  # aliases\n\nFD\tsharkdp/fd\nkubens  ahmetb/kubectx\t kubens\nrg       BurntSushi/ripgrep\nuv\t  astral-sh/uv\n"
 	entries, err := Parse(strings.NewReader(input), "test aliases")
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []Entry{
 		{Alias: "fd", Repository: "sharkdp/fd"},
+		{Alias: "kubens", Repository: "ahmetb/kubectx", AssetHint: "kubens"},
 		{Alias: "rg", Repository: "BurntSushi/ripgrep"},
 		{Alias: "uv", Repository: "astral-sh/uv"},
 	}
@@ -29,10 +30,11 @@ func TestParseRejectsInvalidEntries(t *testing.T) {
 		input string
 		want  string
 	}{
-		{name: "missing repository", input: "fd\n", want: "expected alias and OWNER/REPO"},
-		{name: "extra field", input: "fd sharkdp/fd extra\n", want: "found 3 fields"},
+		{name: "missing repository", input: "fd\n", want: "expected alias, OWNER/REPO"},
+		{name: "extra field", input: "fd sharkdp/fd hint extra\n", want: "found 4 fields"},
 		{name: "alias path", input: "tools/fd sharkdp/fd\n", want: "invalid alias"},
 		{name: "invalid repository", input: "fd sharkdp\n", want: "invalid repository"},
+		{name: "invalid asset hint", input: "fd sharkdp/fd tools/fd\n", want: "invalid asset hint"},
 		{name: "case-insensitive duplicate", input: "fd sharkdp/fd\nFD fork/fd\n", want: "duplicate alias"},
 	}
 	for _, test := range tests {
@@ -50,12 +52,24 @@ func TestParseRejectsInvalidEntries(t *testing.T) {
 
 func TestLookupIsCaseInsensitive(t *testing.T) {
 	for _, alias := range []string{"fd", "FD", "Fd"} {
-		repository, found, err := Lookup(alias)
+		entry, found, err := Lookup(alias)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !found || repository != "sharkdp/fd" {
-			t.Fatalf("Lookup(%q) = %q, %v, want sharkdp/fd, true", alias, repository, found)
+		if !found || entry.Repository != "sharkdp/fd" {
+			t.Fatalf("Lookup(%q) = %#v, %v, want repository sharkdp/fd, true", alias, entry, found)
+		}
+	}
+}
+
+func TestLookupReturnsAssetHint(t *testing.T) {
+	for _, alias := range []string{"kubens", "logcli"} {
+		entry, found, err := Lookup(alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !found || entry.AssetHint != alias {
+			t.Fatalf("Lookup(%q) = %#v, %v, want asset hint %q, true", alias, entry, found, alias)
 		}
 	}
 }
@@ -63,8 +77,8 @@ func TestLookupIsCaseInsensitive(t *testing.T) {
 func TestPopularDevOpsAliases(t *testing.T) {
 	tests := []Entry{
 		{Alias: "azure-cli", Repository: "Azure/azure-cli"},
+		{Alias: "calicoctl", Repository: "projectcalico/calico"},
 		{Alias: "helm", Repository: "helm/helm"},
-		{Alias: "hf", Repository: "huggingface/huggingface_hub"},
 		{Alias: "hwatch", Repository: "blacknon/hwatch"},
 		{Alias: "jq", Repository: "jqlang/jq"},
 		{Alias: "k9s", Repository: "derailed/k9s"},
@@ -77,24 +91,24 @@ func TestPopularDevOpsAliases(t *testing.T) {
 		{Alias: "vault", Repository: "hashicorp/vault"},
 	}
 	for _, test := range tests {
-		repository, found, err := Lookup(test.Alias)
+		entry, found, err := Lookup(test.Alias)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !found || repository != test.Repository {
-			t.Fatalf("Lookup(%q) = %q, %v, want %q, true", test.Alias, repository, found, test.Repository)
+		if !found || entry.Repository != test.Repository {
+			t.Fatalf("Lookup(%q) = %#v, %v, want repository %q, true", test.Alias, entry, found, test.Repository)
 		}
 	}
 }
 
 func TestInstallerOnlyToolsAreNotAliased(t *testing.T) {
-	for _, alias := range []string{"aws", "awscli"} {
-		repository, found, err := Lookup(alias)
+	for _, alias := range []string{"aws", "awscli", "hf"} {
+		entry, found, err := Lookup(alias)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if found {
-			t.Fatalf("Lookup(%q) = %q, true, want no built-in alias", alias, repository)
+			t.Fatalf("Lookup(%q) = %#v, true, want no built-in alias", alias, entry)
 		}
 	}
 }

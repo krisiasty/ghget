@@ -23,10 +23,13 @@ const maxRegistrySize = 16 << 20
 //go:embed aliases.tsv.zst
 var compressedAliases []byte
 
-// Entry maps a case-insensitive alias to a GitHub OWNER/REPO identifier.
+// Entry maps a case-insensitive alias to a GitHub OWNER/REPO identifier. An
+// optional asset hint identifies the program when a repository publishes
+// several independently packaged tools.
 type Entry struct {
 	Alias      string
 	Repository string
+	AssetHint  string
 }
 
 var loadEmbedded = sync.OnceValues(func() ([]Entry, error) {
@@ -47,21 +50,22 @@ var loadEmbedded = sync.OnceValues(func() ([]Entry, error) {
 })
 
 // Lookup resolves alias without regard to case.
-func Lookup(alias string) (string, bool, error) {
+func Lookup(alias string) (Entry, bool, error) {
 	entries, err := loadEmbedded()
 	if err != nil {
-		return "", false, err
+		return Entry{}, false, err
 	}
 	wanted := strings.ToLower(alias)
 	index := sort.Search(len(entries), func(i int) bool { return entries[i].Alias >= wanted })
 	if index == len(entries) || entries[index].Alias != wanted {
-		return "", false, nil
+		return Entry{}, false, nil
 	}
-	return entries[index].Repository, true, nil
+	return entries[index], true, nil
 }
 
-// Parse reads alias and repository pairs separated by any non-empty run of
-// whitespace. Blank lines and full-line comments beginning with # are ignored.
+// Parse reads aliases, repositories, and optional asset hints separated by any
+// non-empty run of whitespace. Blank lines and full-line comments beginning
+// with # are ignored.
 func Parse(reader io.Reader, source string) ([]Entry, error) {
 	entries := make([]Entry, 0)
 	seen := make(map[string]int)
@@ -72,22 +76,36 @@ func Parse(reader io.Reader, source string) ([]Entry, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			return nil, fmt.Errorf("%s:%d: expected alias and OWNER/REPO, found %d fields", source, lineNumber, len(fields))
+		if len(fields) < 2 || len(fields) > 3 {
+			return nil, fmt.Errorf(
+				"%s:%d: expected alias, OWNER/REPO, and optional asset hint, found %d fields",
+				source,
+				lineNumber,
+				len(fields),
+			)
 		}
 		alias := strings.ToLower(fields[0])
 		repository := fields[1]
+		assetHint := ""
+		if len(fields) == 3 {
+			assetHint = strings.ToLower(fields[2])
+		}
 		if err := validateAlias(alias); err != nil {
 			return nil, fmt.Errorf("%s:%d: %w", source, lineNumber, err)
 		}
 		if err := validateRepository(repository); err != nil {
 			return nil, fmt.Errorf("%s:%d: %w", source, lineNumber, err)
 		}
+		if assetHint != "" {
+			if err := validateAssetHint(assetHint); err != nil {
+				return nil, fmt.Errorf("%s:%d: %w", source, lineNumber, err)
+			}
+		}
 		if previous, exists := seen[alias]; exists {
 			return nil, fmt.Errorf("%s:%d: duplicate alias %q first declared on line %d", source, lineNumber, alias, previous)
 		}
 		seen[alias] = lineNumber
-		entries = append(entries, Entry{Alias: alias, Repository: repository})
+		entries = append(entries, Entry{Alias: alias, Repository: repository, AssetHint: assetHint})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read %s: %w", source, err)
@@ -103,6 +121,15 @@ func validateAlias(alias string) error {
 	for _, character := range alias {
 		if unicode.IsSpace(character) || character == '/' || character == '\\' || character == '@' {
 			return fmt.Errorf("invalid alias %q", alias)
+		}
+	}
+	return nil
+}
+
+func validateAssetHint(assetHint string) error {
+	for _, character := range assetHint {
+		if unicode.IsSpace(character) || character == '/' || character == '\\' || character == '@' {
+			return fmt.Errorf("invalid asset hint %q", assetHint)
 		}
 	}
 	return nil

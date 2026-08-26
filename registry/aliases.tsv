@@ -14,6 +14,9 @@ bat                     sharkdp/bat
 bao                     openbao/openbao
 openbao                 openbao/openbao
 
+# Cloud native networking and network security.
+calicoctl               projectcalico/calico
+
 # Install, manage, and troubleshoot Kubernetes clusters running Cilium.
 cilium                  cilium/cilium-cli
 
@@ -53,9 +56,6 @@ gh                      cli/cli
 # The Kubernetes package manager.
 helm                    helm/helm
 
-# The official command-line interface and Python client for the Hugging Face Hub.
-hf                      huggingface/huggingface_hub
-
 # An alternative watch command with history, diff view, JSONL logging, and change hooks.
 hwatch                  blacknon/hwatch
 
@@ -88,7 +88,7 @@ kubectl                 kubernetes/kubectl
 
 # Switch quickly between Kubernetes clusters and namespaces.
 kubectx                 ahmetb/kubectx
-kubens                  ahmetb/kubectx
+kubens                  ahmetb/kubectx                 kubens
 
 # A Kubernetes credential plugin implementing Azure authentication.
 kubelogin               Azure/kubelogin
@@ -100,7 +100,7 @@ kustomize               kubernetes-sigs/kustomize
 lazydocker              jesseduffield/lazydocker
 
 # A horizontally scalable, highly available, multi-tenant log aggregation system inspired by Prometheus.
-logcli                  grafana/loki
+logcli                  grafana/loki                   logcli
 loki                    grafana/loki
 
 # Run Kubernetes locally.
