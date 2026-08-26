@@ -19,14 +19,18 @@ import (
 )
 
 type fakeClient struct {
-	tag       string
-	assets    []gh.Asset
-	tags      []string
-	content   map[string]string
-	downloads []string
+	tag             string
+	assets          []gh.Asset
+	tags            []string
+	content         map[string]string
+	downloads       []string
+	resolvedOwner   string
+	resolvedProject string
 }
 
-func (f *fakeClient) ResolveLatest(context.Context, string, string) (string, error) {
+func (f *fakeClient) ResolveLatest(_ context.Context, owner, project string) (string, error) {
+	f.resolvedOwner = owner
+	f.resolvedProject = project
 	return f.tag, nil
 }
 
@@ -781,6 +785,35 @@ func TestParseTarget(t *testing.T) {
 		}
 		if owner != tt.owner || repo != tt.repo || file+"|"+tag != tt.fileTag {
 			t.Fatalf("parseTarget(%q) = %q, %q, %q, %q", tt.input, owner, repo, file, tag)
+		}
+	}
+}
+
+func TestResolveRepositoryAlias(t *testing.T) {
+	tests := []struct {
+		input     string
+		want      string
+		aliased   bool
+		wantError string
+	}{
+		{input: "fd", want: "sharkdp/fd", aliased: true},
+		{input: "FD@v10.2.0", want: "sharkdp/fd@v10.2.0", aliased: true},
+		{input: "owner/repo", want: "owner/repo"},
+		{input: "unknown", wantError: "unknown repository alias"},
+	}
+	for _, test := range tests {
+		resolved, aliased, err := resolveRepositoryAlias(test.input)
+		if test.wantError != "" {
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("resolveRepositoryAlias(%q) error = %v, want %q", test.input, err, test.wantError)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resolved != test.want || aliased != test.aliased {
+			t.Fatalf("resolveRepositoryAlias(%q) = %q, %v, want %q, %v", test.input, resolved, aliased, test.want, test.aliased)
 		}
 	}
 }

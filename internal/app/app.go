@@ -24,6 +24,7 @@ import (
 	gh "github.com/krisiasty/ghget/internal/github"
 	"github.com/krisiasty/ghget/internal/matcher"
 	"github.com/krisiasty/ghget/internal/platform"
+	"github.com/krisiasty/ghget/internal/repoalias"
 	"github.com/krisiasty/ghget/internal/tagorder"
 )
 
@@ -33,6 +34,7 @@ const downloadFileMode = 0o644
 
 const usage = `Usage:
   ghget OWNER/REPO/FILE_PATTERN[@TAG] [options]
+  ghget NAME[@TAG] --auto [--install]
   ghget OWNER/REPO[@TAG] --auto [--install]
   ghget OWNER/REPO[@TAG] --list
   ghget OWNER/REPO --tag
@@ -139,7 +141,14 @@ func (a *App) Run(ctx context.Context, args []string) error {
 
 // fetch resolves the release, selects assets, and downloads or extracts them.
 func (a *App) fetch(ctx context.Context, opts options) error {
-	owner, repo, pattern, tag, err := parseTarget(opts.target)
+	target, aliased, err := resolveRepositoryAlias(opts.target)
+	if err != nil {
+		return err
+	}
+	if aliased {
+		_, _ = fmt.Fprintf(a.stderr, "resolved %s to %s\n", opts.target, target)
+	}
+	owner, repo, pattern, tag, err := parseTarget(target)
 	if err != nil {
 		return err
 	}
@@ -815,6 +824,27 @@ func outputPath(opts options) (string, error) {
 		return filepath.Clean(output), nil
 	}
 	return filepath.Join(opts.directory, output), nil
+}
+
+// resolveRepositoryAlias expands a bare built-in alias while leaving an
+// explicit OWNER/REPO target unchanged. A tag suffix is carried across.
+func resolveRepositoryAlias(target string) (string, bool, error) {
+	if strings.Contains(target, "/") {
+		return target, false, nil
+	}
+	alias := target
+	suffix := ""
+	if at := strings.LastIndex(alias, "@"); at >= 0 {
+		alias, suffix = alias[:at], alias[at:]
+	}
+	repository, found, err := repoalias.Lookup(alias)
+	if err != nil {
+		return "", false, fmt.Errorf("resolve repository alias: %w", err)
+	}
+	if !found {
+		return "", false, fmt.Errorf("unknown repository alias %q; use OWNER/REPO", alias)
+	}
+	return repository + suffix, true, nil
 }
 
 func parseTarget(target string) (owner, repo, pattern, tag string, err error) {

@@ -132,7 +132,7 @@ func parseOptions(args []string) (options, error) {
 		}
 	}
 	if len(positional) > 1 {
-		return opts, errors.New("expected one OWNER/REPO[/FILE][@TAG] argument")
+		return opts, errors.New("expected one NAME or OWNER/REPO[/FILE][@TAG] argument")
 	}
 	if len(positional) == 1 {
 		opts.target = positional[0]
@@ -144,7 +144,7 @@ func parseOptions(args []string) (options, error) {
 		return opts, validateUpgrade(opts, modeSet)
 	}
 	if opts.target == "" {
-		return opts, errors.New("missing OWNER/REPO[/FILE][@TAG] argument")
+		return opts, errors.New("missing NAME or OWNER/REPO[/FILE][@TAG] argument")
 	}
 	if opts.listAssets && opts.listTags {
 		return opts, errors.New("--list and --tag are mutually exclusive")

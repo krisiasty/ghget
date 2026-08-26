@@ -1,0 +1,10 @@
+# Alias                 Repository
+bat                     sharkdp/bat
+deno                    denoland/deno
+fd                      sharkdp/fd
+fzf                     junegunn/fzf
+gh                      cli/cli
+kind                    kubernetes-sigs/kind
+rg                      BurntSushi/ripgrep
+ripgrep                 BurntSushi/ripgrep
+uv                      astral-sh/uv
