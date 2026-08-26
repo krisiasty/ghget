@@ -15,7 +15,10 @@ func TestSupported(t *testing.T) {
 		{"TOOL.TAR.GZ", true},
 		{"tool-linux-amd64", false},
 		{"tool-windows-amd64.exe", false},
-		{"tool-linux-amd64.tar.zst", false},
+		{"tool-linux-amd64.tar.zst", true},
+		{"tool.tzst", true},
+		{"tool.zst", true},
+		{"TOOL.TAR.ZST", true},
 		{"tool-linux-amd64.tar.xz", false},
 		{"tool.7z", false},
 	}

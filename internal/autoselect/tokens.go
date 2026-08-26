@@ -111,10 +111,10 @@ var archiveFormats = []struct {
 	{".tar.gz", true, true},
 	{".tar.bz2", true, false},
 	{".tar.xz", true, false},
-	{".tar.zst", true, false},
+	{".tar.zst", true, true},
 	{".tbz2", true, false},
 	{".txz", true, false},
-	{".tzst", true, false},
+	{".tzst", true, true},
 	{".tgz", true, true},
 	{".tar", true, true},
 	{".zip", false, true},
@@ -122,7 +122,7 @@ var archiveFormats = []struct {
 	{".gz", false, true},
 	{".bz2", false, false},
 	{".xz", false, false},
-	{".zst", false, false},
+	{".zst", false, true},
 }
 
 // excludedSuffixes name assets that are never the program itself: checksum and

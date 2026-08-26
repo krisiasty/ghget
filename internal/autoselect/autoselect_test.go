@@ -256,6 +256,23 @@ func TestSelectReportsNothingForUnpublishedPlatforms(t *testing.T) {
 	}
 }
 
+// TestSelectMarksZstdExtractable pins that ollama's Linux build, published
+// only as .tar.zst, can be installed rather than merely downloaded.
+func TestSelectMarksZstdExtractable(t *testing.T) {
+	target := platform.Platform{OS: "linux", Arch: "amd64", Libc: glibc}
+	result, err := Select(loadFixture(t, "ollama_ollama"), target, "ollama")
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, ok := result.Candidate(result.Selected)
+	if !ok {
+		t.Fatalf("Candidate(%q) not found", result.Selected)
+	}
+	if !candidate.Archive || !candidate.Extractable {
+		t.Fatalf("%q: Archive = %v, Extractable = %v, want both true", candidate.Name, candidate.Archive, candidate.Extractable)
+	}
+}
+
 func TestSelectReportsAmbiguousCandidates(t *testing.T) {
 	// jq publishes the same macOS binary under both a macos and an osx name.
 	target := platform.Platform{OS: "darwin", Arch: "amd64", Libc: none}

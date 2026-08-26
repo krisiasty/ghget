@@ -3,7 +3,7 @@ package archive
 import "strings"
 
 // supportedSuffixes are the archive formats Extract can unpack.
-var supportedSuffixes = []string{".zip", ".tar.gz", ".tgz", ".tar", ".gz"}
+var supportedSuffixes = []string{".zip", ".tar.gz", ".tgz", ".tar.zst", ".tzst", ".tar", ".gz", ".zst"}
 
 // Supported reports whether an asset name names an archive Extract can unpack.
 func Supported(assetName string) bool {

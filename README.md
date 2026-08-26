@@ -134,7 +134,7 @@ list uses ascending alphabetic order instead.
 | `-r` | `--regex` | Treat the file pattern as a Go regular expression |
 | `-d PATH` | `--dir PATH` | Choose the destination directory; expand `~` or `$HOME` |
 | `-o PATH` | `--output PATH` | Write a single asset to this filename or path |
-| `-e` | `--extract` | Extract ZIP, TAR, TAR.GZ/TGZ, or GZIP |
+| `-e` | `--extract` | Extract ZIP, TAR, TAR.GZ/TGZ, TAR.ZST/TZST, GZIP, or ZSTD |
 | `-c VALUE` | `--checksum VALUE` | Verify against a digest or checksum file |
 | `-x` | `--executable` | Add executable bits to downloaded/extracted regular files (mode `0755`) |
 | `-u` | `--unquarantine` | Run `sudo xattr -dr com.apple.quarantine` on macOS |
@@ -169,6 +169,10 @@ it with the selected published or GitHub-generated checksum before downloading
 the release asset. A matching file is kept and treated as a successful no-op. A
 mismatch reports that the local file differs and suggests `--force`; if no
 checksum is available, the tool reports that it cannot safely compare the file.
+
+Supported archive formats are ZIP, TAR, TAR.GZ/TGZ, TAR.ZST/TZST, and single
+files compressed with GZIP or Zstandard. Zstandard is decompressed in pure Go,
+so cross-compiled builds need no C toolchain.
 
 Archives are normally held in a temporary file and removed after successful
 extraction. Add `--keep` to retain each archive under its original asset name in
