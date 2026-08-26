@@ -37,6 +37,8 @@ func Extract(archivePath, destination, assetName string, options Options) ([]Fil
 		return extractZIP(archivePath, destination, options)
 	case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"):
 		return extractTarGzip(archivePath, destination, options)
+	case strings.HasSuffix(lower, ".tar.zst"), strings.HasSuffix(lower, ".tzst"):
+		return extractTarZstd(archivePath, destination, options)
 	case strings.HasSuffix(lower, ".tar"):
 		f, err := os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
 		if err != nil {
@@ -46,8 +48,10 @@ func Extract(archivePath, destination, assetName string, options Options) ([]Fil
 		return extractTar(f, destination, options)
 	case strings.HasSuffix(lower, ".gz"):
 		return extractGzip(archivePath, destination, strings.TrimSuffix(assetName, filepath.Ext(assetName)), options)
+	case strings.HasSuffix(lower, ".zst"):
+		return extractZstd(archivePath, destination, strings.TrimSuffix(assetName, filepath.Ext(assetName)), options)
 	default:
-		return nil, fmt.Errorf("cannot extract %s: supported formats are .zip, .tar, .tar.gz, .tgz, and .gz", assetName)
+		return nil, fmt.Errorf("cannot extract %s: supported formats are %s", assetName, strings.Join(supportedSuffixes, ", "))
 	}
 }
 
@@ -197,6 +201,11 @@ func extractGzip(archivePath, destination, outputName string, options Options) (
 	if gz.Name != "" && filepath.Base(gz.Name) == gz.Name {
 		outputName = gz.Name
 	}
+	return extractStream(gz, destination, outputName, options)
+}
+
+// extractStream writes one decompressed stream to destination under outputName.
+func extractStream(r io.Reader, destination, outputName string, options Options) ([]FileResult, error) {
 	clean, err := cleanArchivePath(outputName)
 	if err != nil {
 		return nil, err
@@ -213,7 +222,7 @@ func extractGzip(archivePath, destination, outputName string, options Options) (
 	if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return nil, err
 	}
-	written, err := writeFile(root, target, gz, 0o644, options.Force)
+	written, err := writeFile(root, target, r, 0o644, options.Force)
 	if err != nil {
 		return nil, err
 	}

@@ -52,7 +52,7 @@ Options:
   -r, --regex                treat FILE_PATTERN as a regular expression
   -d, --dir PATH             destination directory (default: .); expands ~ and $HOME
   -o, --output PATH          write a single asset to this filename or path
-  -e, --extract              extract ZIP, TAR, TAR.GZ/TGZ, or GZIP assets
+  -e, --extract              extract ZIP, TAR, TAR.GZ/TGZ, TAR.ZST/TZST, GZIP, or ZSTD
   -c, --checksum VALUE       checksum digest or checksum-file path
   -x, --executable           make downloaded or extracted files executable
   -u, --unquarantine         remove macOS quarantine attributes using sudo
