@@ -76,7 +76,6 @@ func TestLookupReturnsAssetHint(t *testing.T) {
 
 func TestPopularDevOpsAliases(t *testing.T) {
 	tests := []Entry{
-		{Alias: "azure-cli", Repository: "Azure/azure-cli"},
 		{Alias: "calicoctl", Repository: "projectcalico/calico"},
 		{Alias: "helm", Repository: "helm/helm"},
 		{Alias: "hwatch", Repository: "blacknon/hwatch"},
@@ -101,8 +100,8 @@ func TestPopularDevOpsAliases(t *testing.T) {
 	}
 }
 
-func TestInstallerOnlyToolsAreNotAliased(t *testing.T) {
-	for _, alias := range []string{"aws", "awscli", "hf"} {
+func TestUnsupportedToolsAreNotAliased(t *testing.T) {
+	for _, alias := range []string{"aws", "awscli", "az", "azure-cli", "hf"} {
 		entry, found, err := Lookup(alias)
 		if err != nil {
 			t.Fatal(err)

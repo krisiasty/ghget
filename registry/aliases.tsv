@@ -3,10 +3,6 @@
 # Declarative continuous deployment for Kubernetes.
 argocd                  argoproj/argo-cd
 
-# The Azure command-line interface.
-az                      Azure/azure-cli
-azure-cli               Azure/azure-cli
-
 # A cat clone with wings.
 bat                     sharkdp/bat
 
