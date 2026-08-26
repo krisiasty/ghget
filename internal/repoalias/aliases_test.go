@@ -77,6 +77,7 @@ func TestLookupReturnsAssetHint(t *testing.T) {
 func TestPopularDevOpsAliases(t *testing.T) {
 	tests := []Entry{
 		{Alias: "calicoctl", Repository: "projectcalico/calico"},
+		{Alias: "dra", Repository: "devmatteini/dra"},
 		{Alias: "helm", Repository: "helm/helm"},
 		{Alias: "hl", Repository: "pamburus/hl"},
 		{Alias: "hwatch", Repository: "blacknon/hwatch"},

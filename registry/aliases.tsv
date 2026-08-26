@@ -34,6 +34,9 @@ dive                    wagoodman/dive
 # The official command-line interface for the DigitalOcean API.
 doctl                   digitalocean/doctl
 
+# Download release assets from GitHub.
+dra                     devmatteini/dra
+
 # The official command-line interface for Amazon EKS.
 eksctl                  eksctl-io/eksctl
 
