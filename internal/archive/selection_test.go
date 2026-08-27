@@ -112,12 +112,14 @@ func TestExtractSelectedMembersValidatesBeforeWriting(t *testing.T) {
 		{
 			name: "ZIP",
 			path: func(t *testing.T) string {
+				t.Helper()
 				return writeSelectedZIP(t, []testZIPEntry{{name: "present", content: "content", mode: 0o644}})
 			},
 		},
 		{
 			name: "TAR",
 			path: func(t *testing.T) string {
+				t.Helper()
 				return writeFileTo(t, "bundle.tar", tarWith(t, map[string]string{"present": "content"}))
 			},
 		},

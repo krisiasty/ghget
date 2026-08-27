@@ -250,7 +250,7 @@ func preflightTar(r io.Reader, selection *fileSelection) error {
 		if !selection.wants(header.Name) {
 			continue
 		}
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if !header.FileInfo().Mode().IsRegular() {
 			return selection.rejectNonRegular(header.Name)
 		}
 		if _, err := selection.addRegular(header.Name); err != nil {
@@ -285,7 +285,7 @@ func extractSelectedTar(
 		if !selected {
 			continue
 		}
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		if !header.FileInfo().Mode().IsRegular() {
 			return results, fmt.Errorf("requested archive member %q is not a regular file", header.Name)
 		}
 		if err := rejectSymlinkComponents(root, target); err != nil {

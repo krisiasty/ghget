@@ -15,9 +15,6 @@ type fileSelection struct {
 }
 
 func newFileSelection(files []string, flat bool) (*fileSelection, error) {
-	if len(files) == 0 {
-		return nil, nil
-	}
 	selection := &fileSelection{
 		wanted:  make(map[string]struct{}, len(files)),
 		found:   make(map[string]struct{}, len(files)),
