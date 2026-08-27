@@ -62,6 +62,7 @@ Options:
   -f, --force                overwrite existing files
   -k, --keep                 keep the downloaded archive after extraction
       --flat                 extract all files directly into the destination directory
+      --file ARCHIVE_PATH    extract only this exact archive member; repeatable
       --upgrade              replace the running ghget binary with the latest release
       --debug                log HTTP telemetry to stderr
       --version              show version and build information
@@ -747,6 +748,7 @@ func (a *App) downloadOne(
 		results, extractErr := archive.Extract(tmpPath, opts.directory, asset.Name, archive.Options{
 			Force: opts.force,
 			Flat:  opts.flat,
+			Files: opts.files,
 		})
 		paths := make([]string, 0, len(results)+1)
 		for _, result := range results {

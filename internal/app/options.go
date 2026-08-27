@@ -29,6 +29,7 @@ type options struct {
 	force        bool
 	keep         bool
 	flat         bool
+	files        []string
 	debug        bool
 	help         bool
 	version      bool
@@ -94,6 +95,12 @@ func parseOptions(args []string) (options, error) {
 			opts.keep = true
 		case "--flat":
 			opts.flat = true
+		case "--file":
+			v, err := value()
+			if err != nil {
+				return opts, err
+			}
+			opts.files = append(opts.files, v)
 		case "--debug":
 			opts.debug = true
 		case "-d", "--dir":
@@ -157,6 +164,9 @@ func parseOptions(args []string) (options, error) {
 	}
 	if opts.flat && !opts.extract {
 		return opts, errors.New("--flat requires --extract")
+	}
+	if len(opts.files) > 0 && !opts.extract {
+		return opts, errors.New("--file requires --extract")
 	}
 	if err := validateAuto(opts, modeSet); err != nil {
 		return opts, err
@@ -242,6 +252,7 @@ func validateUpgrade(opts options, modeSet bool) error {
 		{opts.extract, "--extract"},
 		{opts.keep, "--keep"},
 		{opts.flat, "--flat"},
+		{len(opts.files) > 0, "--file"},
 		{opts.output != "", "--output"},
 		{opts.directorySet, "--dir"},
 		{opts.checksum != "", "--checksum"},
