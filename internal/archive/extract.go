@@ -21,6 +21,7 @@ import (
 type Options struct {
 	Force bool
 	Flat  bool
+	Files []string
 }
 
 // FileResult describes whether an extracted path was written or already matched.
@@ -40,12 +41,7 @@ func Extract(archivePath, destination, assetName string, options Options) ([]Fil
 	case strings.HasSuffix(lower, ".tar.zst"), strings.HasSuffix(lower, ".tzst"):
 		return extractTarZstd(archivePath, destination, options)
 	case strings.HasSuffix(lower, ".tar"):
-		f, err := os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = f.Close() }()
-		return extractTar(f, destination, options)
+		return extractTarFile(archivePath, destination, options)
 	case strings.HasSuffix(lower, ".gz"):
 		return extractGzip(archivePath, destination, strings.TrimSuffix(assetName, filepath.Ext(assetName)), options)
 	case strings.HasSuffix(lower, ".zst"):
@@ -61,6 +57,9 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 		return nil, fmt.Errorf("open ZIP archive: %w", err)
 	}
 	defer func() { _ = zr.Close() }()
+	if len(options.Files) > 0 {
+		return extractSelectedZIP(zr.File, destination, options)
+	}
 	root, rootPath, err := openDestinationRoot(destination)
 	if err != nil {
 		return nil, err
@@ -116,18 +115,192 @@ func extractZIP(archivePath, destination string, options Options) ([]FileResult,
 	return results, nil
 }
 
-func extractTarGzip(archivePath, destination string, options Options) ([]FileResult, error) {
-	f, err := os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
+type selectedZIPEntry struct {
+	entry  *zip.File
+	target string
+}
+
+func extractSelectedZIP(entries []*zip.File, destination string, options Options) ([]FileResult, error) {
+	selection, err := newFileSelection(options.Files, options.Flat)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = f.Close() }()
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		return nil, fmt.Errorf("open gzip stream: %w", err)
+	selected := make([]selectedZIPEntry, 0, len(selection.wanted))
+	for _, entry := range entries {
+		if !selection.wants(entry.Name) {
+			continue
+		}
+		mode := entry.Mode()
+		if mode&os.ModeSymlink != 0 || entry.FileInfo().IsDir() || !mode.IsRegular() {
+			return nil, selection.rejectNonRegular(entry.Name)
+		}
+		target, err := selection.addRegular(entry.Name)
+		if err != nil {
+			return nil, err
+		}
+		selected = append(selected, selectedZIPEntry{entry: entry, target: target})
 	}
-	defer func() { _ = gz.Close() }()
-	return extractTar(gz, destination, options)
+	if err := selection.finish(); err != nil {
+		return nil, err
+	}
+
+	root, rootPath, err := openDestinationRoot(destination)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	results := make([]FileResult, 0, len(selected))
+	for _, item := range selected {
+		if err := rejectSymlinkComponents(root, item.target); err != nil {
+			return results, err
+		}
+		if err := root.MkdirAll(filepath.Dir(item.target), 0o755); err != nil {
+			return results, err
+		}
+		r, err := item.entry.Open()
+		if err != nil {
+			return results, err
+		}
+		written, err := writeFile(root, item.target, r, fileMode(item.entry.Mode()), options.Force)
+		if err != nil {
+			_ = r.Close()
+			return results, err
+		}
+		if err := r.Close(); err != nil {
+			return results, err
+		}
+		results = append(results, FileResult{Path: filepath.Join(rootPath, item.target), Written: written})
+	}
+	return results, nil
+}
+
+type tarReaderOpener func() (io.ReadCloser, error)
+
+type readerCloser struct {
+	io.Reader
+	close func() error
+}
+
+func (r *readerCloser) Close() error {
+	return r.close()
+}
+
+func extractTarFile(archivePath, destination string, options Options) ([]FileResult, error) {
+	return extractTarArchive(func() (io.ReadCloser, error) {
+		return os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
+	}, destination, options)
+}
+
+func extractTarGzip(archivePath, destination string, options Options) ([]FileResult, error) {
+	return extractTarArchive(func() (io.ReadCloser, error) {
+		f, err := os.Open(archivePath) //nolint:gosec // archivePath is the verified temporary release asset selected by the caller.
+		if err != nil {
+			return nil, err
+		}
+		gz, err := gzip.NewReader(f)
+		if err != nil {
+			_ = f.Close()
+			return nil, fmt.Errorf("open gzip stream: %w", err)
+		}
+		return &readerCloser{Reader: gz, close: func() error {
+			return errors.Join(gz.Close(), f.Close())
+		}}, nil
+	}, destination, options)
+}
+
+func extractTarArchive(open tarReaderOpener, destination string, options Options) ([]FileResult, error) {
+	r, err := open()
+	if err != nil {
+		return nil, err
+	}
+	if len(options.Files) == 0 {
+		defer func() { _ = r.Close() }()
+		return extractTar(r, destination, options)
+	}
+	selection, err := newFileSelection(options.Files, options.Flat)
+	if err == nil {
+		err = preflightTar(r, selection)
+	}
+	closeErr := r.Close()
+	if err != nil {
+		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+
+	r, err = open()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = r.Close() }()
+	return extractSelectedTar(r, destination, options, selection.targets)
+}
+
+func preflightTar(r io.Reader, selection *fileSelection) error {
+	tr := tar.NewReader(r)
+	for {
+		header, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return selection.finish()
+		}
+		if err != nil {
+			return fmt.Errorf("read TAR archive: %w", err)
+		}
+		if !selection.wants(header.Name) {
+			continue
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return selection.rejectNonRegular(header.Name)
+		}
+		if _, err := selection.addRegular(header.Name); err != nil {
+			return err
+		}
+	}
+}
+
+func extractSelectedTar(
+	r io.Reader,
+	destination string,
+	options Options,
+	targets map[string]string,
+) ([]FileResult, error) {
+	root, rootPath, err := openDestinationRoot(destination)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+
+	tr := tar.NewReader(r)
+	results := make([]FileResult, 0, len(targets))
+	for {
+		header, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return results, nil
+		}
+		if err != nil {
+			return results, fmt.Errorf("read TAR archive: %w", err)
+		}
+		target, selected := targets[header.Name]
+		if !selected {
+			continue
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return results, fmt.Errorf("requested archive member %q is not a regular file", header.Name)
+		}
+		if err := rejectSymlinkComponents(root, target); err != nil {
+			return results, err
+		}
+		if err := root.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return results, err
+		}
+		mode := fs.FileMode(header.Mode & 0o777)
+		written, err := writeFile(root, target, io.LimitReader(tr, header.Size), fileMode(mode), options.Force)
+		if err != nil {
+			return results, err
+		}
+		results = append(results, FileResult{Path: filepath.Join(rootPath, target), Written: written})
+	}
 }
 
 func extractTar(r io.Reader, destination string, options Options) ([]FileResult, error) {
@@ -209,6 +382,20 @@ func extractStream(r io.Reader, destination, outputName string, options Options)
 	clean, err := cleanArchivePath(outputName)
 	if err != nil {
 		return nil, err
+	}
+	if len(options.Files) > 0 {
+		selection, err := newFileSelection(options.Files, options.Flat)
+		if err != nil {
+			return nil, err
+		}
+		if selection.wants(outputName) {
+			if _, err := selection.addRegular(outputName); err != nil {
+				return nil, err
+			}
+		}
+		if err := selection.finish(); err != nil {
+			return nil, err
+		}
 	}
 	root, rootPath, err := openDestinationRoot(destination)
 	if err != nil {

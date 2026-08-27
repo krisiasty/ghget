@@ -111,3 +111,34 @@ func TestRunCreatesMissingDestinationDirectory(t *testing.T) {
 		t.Fatalf("downloaded content = %q, err = %v", got, err)
 	}
 }
+
+func TestParseOptionsFiles(t *testing.T) {
+	opts, err := parseOptions([]string{
+		"acme/tool/bundle.zip",
+		"--extract",
+		"--file", "bin/tool",
+		"--file=completions/tool.zsh",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"bin/tool", "completions/tool.zsh"}
+	if len(opts.files) != len(want) {
+		t.Fatalf("files = %v, want %v", opts.files, want)
+	}
+	for index := range want {
+		if opts.files[index] != want[index] {
+			t.Fatalf("files = %v, want %v", opts.files, want)
+		}
+	}
+
+	for _, args := range [][]string{
+		{"acme/tool/bundle.zip", "--file", "bin/tool"},
+		{"acme/tool/bundle.zip", "--extract", "--install", "--file", "bin/tool"},
+		{"--upgrade", "--extract", "--file", "bin/tool"},
+	} {
+		if _, err := parseOptions(args); err == nil {
+			t.Errorf("parseOptions(%v) = nil error, want a conflict", args)
+		}
+	}
+}

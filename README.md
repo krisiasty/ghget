@@ -156,6 +156,10 @@ ghget owner/project/'project_linux_amd64.tar.gz' --extract --dir ~/.local/bin --
 # Discard paths inside the archive and put every file directly in ./tools.
 ghget owner/project/'project_linux_amd64.tar.gz' --extract --flat --dir ./tools
 
+# Extract only selected archive members, preserving their stored paths.
+ghget owner/project/'project_linux_amd64.tar.gz' --extract \
+  --file bin/project --file completions/project.zsh
+
 # List assets or release tags.
 ghget owner/project --list
 ghget owner/project@v2.0.0 --list
@@ -187,6 +191,7 @@ list uses ascending alphabetic order instead.
 | `-f` | `--force` | Overwrite existing downloaded or extracted files |
 | `-k` | `--keep` | Keep the downloaded archive when using `--extract` |
 | | `--flat` | Extract all files directly into the destination directory |
+| | `--file ARCHIVE_PATH` | Extract one exact archive member; repeatable and requires `--extract` |
 | | `--upgrade` | Replace the running `ghget` binary with the latest release |
 | | `--debug` | Log structured HTTP telemetry to standard error |
 | | `--version` | Show version, commit, and build timestamp |
@@ -232,6 +237,13 @@ directories stored in the archive and place every regular file directly in the
 destination directory. If flattened entries have the same filename, identical
 content is accepted while differing content requires `--force` (the later entry
 wins when forced). Both `--flat` and `--keep` require `--extract`.
+
+Use repeatable `--file ARCHIVE_PATH` options with `--extract` to extract only
+the named regular files. Paths must exactly match the names stored in the
+archive and are preserved unless `--flat` is also used. All requested members
+are validated before extraction begins, so a missing member, non-regular member,
+unsafe path, or flattened filename collision produces an error without writing
+any selected files. Repeating the same `--file` value has no additional effect.
 
 ## Repository aliases
 
