@@ -4,3 +4,6 @@
 # in an in-toto attestation filename.
 [files]
 extend-exclude = ["internal/autoselect/testdata/*.txt"]
+
+[default.extend-words]
+Hashi = "Hashi"
