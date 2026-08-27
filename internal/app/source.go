@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	gh "github.com/krisiasty/ghget/internal/github"
+	"github.com/krisiasty/ghget/internal/hashicorp"
 	"github.com/krisiasty/ghget/internal/kubernetes"
 	"github.com/krisiasty/ghget/internal/source"
 )
@@ -47,5 +48,6 @@ func (a *App) backend(name string) (source.Backend, error) {
 func defaultBackends(httpClient *http.Client) map[string]source.Backend {
 	return map[string]source.Backend{
 		"kubernetes": kubernetes.NewClient(httpClient),
+		"hashicorp":  hashicorp.NewClient(httpClient),
 	}
 }

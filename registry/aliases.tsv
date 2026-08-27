@@ -149,8 +149,7 @@ stern                   stern/stern
 talosctl                siderolabs/talos
 
 # Safely and predictably create, change, and improve infrastructure.
-# Disabled until ghget supports releases.hashicorp.com; tracked in issue #22.
-# terraform             hashicorp/terraform
+terraform               hashicorp/terraform             terraform               hashicorp
 
 # Generate documentation from Terraform modules in various formats.
 terraform-docs          terraform-docs/terraform-docs
@@ -171,8 +170,7 @@ trivy                   aquasecurity/trivy
 uv                      astral-sh/uv
 
 # A tool for secrets management, encryption as a service, and privileged access management.
-# Disabled until ghget supports releases.hashicorp.com; tracked in issue #22.
-# vault                 hashicorp/vault
+vault                   hashicorp/vault                 vault                   hashicorp
 
 # Back up and migrate Kubernetes applications and their persistent volumes.
 velero                  velero-io/velero

@@ -388,3 +388,12 @@ The `kubectl` and `kubeadm` aliases use the fixed official Kubernetes layout:
 - the matching `.sha256` sidecar to verify it before installation.
 
 Explicit versions such as `kubectl@v1.36.2` skip the stable-version lookup.
+
+The `terraform` and `vault` aliases use `releases.hashicorp.com`. ghget discovers
+stable versions from the official product index, confirms the requested
+`PRODUCT_VERSION_OS_ARCH.zip` on its release page, and verifies it against the
+mandatory `PRODUCT_VERSION_SHA256SUMS` manifest before extraction. Prerelease,
+enterprise, and FIPS variants are excluded from automatic version selection.
+
+Explicit versions accept either form, such as `terraform@1.10.2` or
+`terraform@v1.10.2`; the leading `v` is normalized for HashiCorp's URL layout.
