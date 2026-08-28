@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	connectTimeout = 2 * time.Second
+	connectTimeout = 5 * time.Second
 	requestTimeout = 30 * time.Minute
 )
 
