@@ -75,6 +75,14 @@ func Variants(tag string) []string {
 	return []string{tag, withoutV}
 }
 
+// IsNewer reports whether candidate has higher semantic-version precedence
+// than current. Invalid versions cannot establish that an update is available.
+func IsNewer(candidate, current string) bool {
+	candidateVersion, candidateOK := parse(candidate)
+	currentVersion, currentOK := parse(current)
+	return candidateOK && currentOK && compare(candidateVersion, currentVersion) > 0
+}
+
 func parse(tag string) (version, bool) {
 	value := strings.TrimPrefix(tag, "v")
 	if value == "" || strings.ContainsAny(value, " \t\r\n") {

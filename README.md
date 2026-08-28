@@ -83,6 +83,10 @@ Once installed, `ghget` upgrades itself:
 ghget --upgrade
 ```
 
+At startup, `ghget` checks for a newer release and prints an upgrade reminder
+when one is available. Use `--skip-version-check` to omit this lookup for an
+invocation.
+
 This finds the running binary, downloads the latest release built for the
 current platform, verifies its published checksum, and replaces the binary in
 place with mode `0755`. When the binary is already the latest release, nothing
@@ -193,6 +197,7 @@ list uses ascending alphabetic order instead.
 | | `--flat` | Extract all files directly into the destination directory |
 | | `--file ARCHIVE_PATH` | Extract one exact archive member; repeatable and requires `--extract` |
 | | `--upgrade` | Replace the running `ghget` binary with the latest release |
+| | `--skip-version-check` | Do not check for a newer `ghget` release at startup |
 | | `--debug` | Log structured HTTP telemetry to standard error |
 | | `--version` | Show version, commit, and build timestamp |
 

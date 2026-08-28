@@ -45,12 +45,15 @@ func TestExpandHomePath(t *testing.T) {
 }
 
 func TestParseOptionsUpgrade(t *testing.T) {
-	opts, err := parseOptions([]string{"--upgrade"})
+	opts, err := parseOptions([]string{"--upgrade", "--skip-version-check"})
 	if err != nil {
 		t.Fatalf("parseOptions(--upgrade): %v", err)
 	}
 	if !opts.upgrade {
 		t.Fatal("upgrade = false, want true")
+	}
+	if !opts.skipVersionCheck {
+		t.Fatal("skipVersionCheck = false, want true")
 	}
 	for _, args := range [][]string{
 		{"--upgrade", "acme/tool"},

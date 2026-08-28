@@ -26,9 +26,11 @@ type fakeClient struct {
 	downloads       []string
 	resolvedOwner   string
 	resolvedProject string
+	resolutions     int
 }
 
 func (f *fakeClient) ResolveLatest(_ context.Context, owner, project string) (string, error) {
+	f.resolutions++
 	f.resolvedOwner = owner
 	f.resolvedProject = project
 	return f.tag, nil
@@ -58,6 +60,45 @@ func TestVersion(t *testing.T) {
 	}
 	if want := "ghget dev (commit unknown, built unknown)\n"; stdout.String() != want {
 		t.Fatalf("output = %q, want %q", stdout.String(), want)
+	}
+}
+
+func TestCheckForUpdateWarnsWhenNewerReleaseExists(t *testing.T) {
+	client := &fakeClient{tag: "v1.2.0"}
+	var stderr strings.Builder
+	a := NewWithClient(client, io.Discard, &stderr)
+
+	latest, err := a.checkForUpdate(context.Background(), "v1.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest != "v1.2.0" {
+		t.Fatalf("latest = %q, want %q", latest, "v1.2.0")
+	}
+	want := "warning: ghget v1.2.0 is available (current v1.1.0); run \"ghget --upgrade\" to update\n"
+	if got := stderr.String(); got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}
+
+func TestRunChecksForUpdatesUnlessSkipped(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		args        []string
+		wantResolve int
+	}{
+		{name: "default", args: []string{"--version"}, wantResolve: 1},
+		{name: "skipped", args: []string{"--version", "--skip-version-check"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := &fakeClient{tag: "v1.2.0"}
+			if err := NewWithClient(client, io.Discard, io.Discard).Run(context.Background(), test.args); err != nil {
+				t.Fatal(err)
+			}
+			if client.resolutions != test.wantResolve {
+				t.Fatalf("ResolveLatest calls = %d, want %d", client.resolutions, test.wantResolve)
+			}
+		})
 	}
 }
 

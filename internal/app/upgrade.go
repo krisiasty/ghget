@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/krisiasty/ghget/internal/buildinfo"
+	"github.com/krisiasty/ghget/internal/tagorder"
 )
 
 // ghget upgrades itself from its own public releases.
@@ -17,8 +18,27 @@ const (
 	upgradeRepo  = "ghget"
 )
 
+// checkForUpdate returns the latest published release and warns when it is
+// newer than current. Lookup failures are nonfatal for ordinary commands.
+func (a *App) checkForUpdate(ctx context.Context, current string) (string, error) {
+	if a.client == nil {
+		return "", nil
+	}
+	tag, err := a.client.ResolveLatest(ctx, upgradeOwner, upgradeRepo)
+	if err != nil {
+		a.debug(ctx, "version check failed", "error", err)
+		return "", nil
+	}
+	a.debug(ctx, "version check completed", "current", current, "latest", tag)
+	if !tagorder.IsNewer(tag, current) {
+		return tag, nil
+	}
+	_, err = fmt.Fprintf(a.stderr, "warning: ghget %s is available (current %s); run \"ghget --upgrade\" to update\n", tag, current)
+	return tag, err
+}
+
 // upgrade replaces the running binary with the latest published release.
-func (a *App) upgrade(ctx context.Context, opts options) error {
+func (a *App) upgrade(ctx context.Context, opts options, tag string) error {
 	path, err := a.executablePath()
 	if err != nil {
 		return fmt.Errorf("locate the running ghget binary: %w", err)
@@ -35,9 +55,11 @@ func (a *App) upgrade(ctx context.Context, opts options) error {
 	if err := checkReplaceable(resolved); err != nil {
 		return err
 	}
-	tag, err := a.client.ResolveLatest(ctx, upgradeOwner, upgradeRepo)
-	if err != nil {
-		return err
+	if tag == "" {
+		tag, err = a.client.ResolveLatest(ctx, upgradeOwner, upgradeRepo)
+		if err != nil {
+			return err
+		}
 	}
 	if !opts.force && isCurrentRelease(buildinfo.Version(), tag) {
 		_, err := fmt.Fprintf(a.stdout, "ghget %s is already the latest release\n", buildinfo.Version())

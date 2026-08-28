@@ -64,6 +64,7 @@ Options:
       --flat                 extract all files directly into the destination directory
       --file ARCHIVE_PATH    extract only this exact archive member; repeatable
       --upgrade              replace the running ghget binary with the latest release
+      --skip-version-check   do not check for a newer ghget release at startup
       --debug                log HTTP telemetry to stderr
       --version              show version and build information
   -h, --help                 show this help
@@ -123,14 +124,6 @@ func (a *App) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if opts.help {
-		_, err := io.WriteString(a.stdout, usage)
-		return err
-	}
-	if opts.version {
-		_, err := fmt.Fprintln(a.stdout, buildinfo.String())
-		return err
-	}
 	if opts.debug {
 		a.logger = slog.New(slog.NewTextHandler(a.stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 		if client, ok := a.client.(interface{ SetLogger(*slog.Logger) }); ok {
@@ -143,8 +136,23 @@ func (a *App) Run(ctx context.Context, args []string) error {
 		}
 		a.logger.DebugContext(ctx, "debug telemetry enabled")
 	}
+	latest := ""
+	if !opts.skipVersionCheck {
+		latest, err = a.checkForUpdate(ctx, buildinfo.Version())
+		if err != nil {
+			return err
+		}
+	}
+	if opts.help {
+		_, err := io.WriteString(a.stdout, usage)
+		return err
+	}
+	if opts.version {
+		_, err := fmt.Fprintln(a.stdout, buildinfo.String())
+		return err
+	}
 	if opts.upgrade {
-		return a.upgrade(ctx, opts)
+		return a.upgrade(ctx, opts, latest)
 	}
 	return a.fetch(ctx, opts)
 }

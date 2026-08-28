@@ -58,6 +58,9 @@ func TestUpgradeReplacesResolvedSymlinkTarget(t *testing.T) {
 	if err := a.Run(context.Background(), []string{"--upgrade"}); err != nil {
 		t.Fatal(err)
 	}
+	if client.resolutions != 1 {
+		t.Fatalf("ResolveLatest calls = %d, want 1", client.resolutions)
+	}
 
 	got, err := os.ReadFile(target) //nolint:gosec // The path is confined to the test's temporary directory.
 	if err != nil || string(got) != "new binary" {

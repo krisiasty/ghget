@@ -71,3 +71,24 @@ func TestVariants(t *testing.T) {
 		}
 	}
 }
+
+func TestIsNewer(t *testing.T) {
+	tests := []struct {
+		candidate string
+		current   string
+		want      bool
+	}{
+		{candidate: "v1.2.0", current: "v1.1.9", want: true},
+		{candidate: "1.2.0", current: "v1.2.0"},
+		{candidate: "v1.2.0-rc.2", current: "v1.2.0-rc.1", want: true},
+		{candidate: "v1.2.0-rc.1", current: "v1.2.0"},
+		{candidate: "v1.1.9", current: "v1.2.0"},
+		{candidate: "latest", current: "v1.2.0"},
+		{candidate: "v1.2.0", current: "dev"},
+	}
+	for _, test := range tests {
+		if got := IsNewer(test.candidate, test.current); got != test.want {
+			t.Errorf("IsNewer(%q, %q) = %v, want %v", test.candidate, test.current, got, test.want)
+		}
+	}
+}
