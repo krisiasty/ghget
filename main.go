@@ -4,13 +4,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/krisiasty/ghget/internal/app"
+	"github.com/krisiasty/ghget/internal/httpclient"
 )
 
 func main() {
@@ -20,7 +19,7 @@ func main() {
 func run(parent context.Context, args []string) int {
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	httpClient := &http.Client{Timeout: 30 * time.Minute}
+	httpClient := httpclient.New()
 	if err := app.New(httpClient, os.Stdout, os.Stderr).Run(ctx, args); err != nil {
 		fmt.Fprintf(os.Stderr, "ghget: %v\n", err)
 		return 1
