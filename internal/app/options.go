@@ -11,28 +11,29 @@ import (
 )
 
 type options struct {
-	target       string
-	directory    string
-	directorySet bool
-	upgrade      bool
-	auto         bool
-	install      bool
-	first        bool
-	output       string
-	checksum     string
-	mode         matcher.Mode
-	listAssets   bool
-	listTags     bool
-	extract      bool
-	executable   bool
-	unquarantine bool
-	force        bool
-	keep         bool
-	flat         bool
-	files        []string
-	debug        bool
-	help         bool
-	version      bool
+	target           string
+	directory        string
+	directorySet     bool
+	upgrade          bool
+	auto             bool
+	install          bool
+	first            bool
+	output           string
+	checksum         string
+	mode             matcher.Mode
+	listAssets       bool
+	listTags         bool
+	extract          bool
+	executable       bool
+	unquarantine     bool
+	force            bool
+	keep             bool
+	flat             bool
+	files            []string
+	debug            bool
+	skipVersionCheck bool
+	help             bool
+	version          bool
 }
 
 func parseOptions(args []string) (options, error) {
@@ -103,6 +104,8 @@ func parseOptions(args []string) (options, error) {
 			opts.files = append(opts.files, v)
 		case "--debug":
 			opts.debug = true
+		case "--skip-version-check":
+			opts.skipVersionCheck = true
 		case "-d", "--dir":
 			v, err := value()
 			if err != nil {
