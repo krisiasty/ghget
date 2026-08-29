@@ -406,8 +406,9 @@ The `kubectl` and `kubeadm` aliases use the fixed official Kubernetes layout:
 
 Explicit versions such as `kubectl@v1.36.2` skip the stable-version lookup.
 
-The `terraform` and `vault` aliases use `releases.hashicorp.com`. ghget discovers
-stable versions from the official product index, confirms the requested
+The `boundary`, `consul`, `hcp`, `nomad`, `packer`, `terraform`, `terraform-ls`,
+and `vault` aliases use `releases.hashicorp.com`. ghget discovers stable versions
+from the official product index, confirms the requested
 `PRODUCT_VERSION_OS_ARCH.zip` on its release page, and verifies it against the
 mandatory `PRODUCT_VERSION_SHA256SUMS` manifest before extraction. Prerelease,
 enterprise, and FIPS variants are excluded from automatic version selection.

@@ -88,6 +88,77 @@ func TestListAssetsNormalizesVersionAndConfirmsFiles(t *testing.T) {
 	}
 }
 
+func TestSupportedProductsResolveAndListAssets(t *testing.T) {
+	tests := []struct {
+		product string
+		goos    string
+		goarch  string
+	}{
+		{product: "boundary", goos: "linux", goarch: "amd64"},
+		{product: "consul", goos: "darwin", goarch: "arm64"},
+		{product: "hcp", goos: "windows", goarch: "arm64"},
+		{product: "nomad", goos: "linux", goarch: "arm64"},
+		{product: "packer", goos: "freebsd", goarch: "arm"},
+		{product: "terraform", goos: "linux", goarch: "amd64"},
+		{product: "terraform-ls", goos: "windows", goarch: "arm64"},
+		{product: "vault", goos: "darwin", goarch: "amd64"},
+	}
+	for _, test := range tests {
+		t.Run(test.product, func(t *testing.T) {
+			version := "1.2.3"
+			archiveName := test.product + "_" + version + "_" + test.goos + "_" + test.goarch + ".zip"
+			manifestName := test.product + "_" + version + "_SHA256SUMS"
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/" + test.product + "/":
+					_, _ = io.WriteString(w, strings.Join([]string{
+						`<a href="1.2.3/">stable</a>`,
+						`<a href="1.3.0-rc1/">prerelease</a>`,
+						`<a href="1.2.3+ent/">enterprise</a>`,
+					}, "\n"))
+				case "/" + test.product + "/" + version + "/":
+					_, _ = io.WriteString(w, strings.Join([]string{
+						`<a href="` + archiveName + `">archive</a>`,
+						`<a href="` + manifestName + `">checksums</a>`,
+					}, "\n"))
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+
+			client := NewClientWithBaseURL(server.Client(), server.URL)
+			productTarget := target(test.product, test.goos, test.goarch)
+			latest, err := client.ResolveLatest(context.Background(), productTarget)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if latest != version {
+				t.Fatalf("ResolveLatest() = %q, want %q", latest, version)
+			}
+
+			assets, err := client.ListAssets(context.Background(), productTarget, "v"+version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []source.Asset{
+				{
+					Name:             archiveName,
+					URL:              server.URL + "/" + test.product + "/" + version + "/" + archiveName,
+					ChecksumRequired: true,
+				},
+				{
+					Name: manifestName,
+					URL:  server.URL + "/" + test.product + "/" + version + "/" + manifestName,
+				},
+			}
+			if !reflect.DeepEqual(assets, want) {
+				t.Fatalf("ListAssets() = %#v, want %#v", assets, want)
+			}
+		})
+	}
+}
+
 func TestListAssetsReportsUnavailableInputs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -128,7 +199,7 @@ func TestListAssetsReportsUnavailableInputs(t *testing.T) {
 		},
 		{
 			name:    "product",
-			target:  target("consul", "linux", "amd64"),
+			target:  target("unsupported", "linux", "amd64"),
 			version: "1.20.0",
 			want:    "unsupported HashiCorp product",
 		},

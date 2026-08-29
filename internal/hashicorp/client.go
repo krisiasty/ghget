@@ -33,8 +33,14 @@ var (
 		`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`,
 	)
 	supportedProducts = map[string]struct{}{
-		"terraform": {},
-		"vault":     {},
+		"boundary":     {},
+		"consul":       {},
+		"hcp":          {},
+		"nomad":        {},
+		"packer":       {},
+		"terraform":    {},
+		"terraform-ls": {},
+		"vault":        {},
 	}
 )
 

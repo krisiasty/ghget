@@ -6,6 +6,9 @@ argocd                  argoproj/argo-cd
 # A cat clone with wings.
 bat                     sharkdp/bat
 
+# Secure remote access to infrastructure with identity-based controls.
+boundary                hashicorp/boundary              boundary                hashicorp
+
 # Manage, store, and distribute sensitive data including secrets, certificates, and keys.
 bao                     openbao/openbao
 openbao                 openbao/openbao
@@ -15,6 +18,9 @@ calicoctl               projectcalico/calico
 
 # Install, manage, and troubleshoot Kubernetes clusters running Cilium.
 cilium                  cilium/cilium-cli
+
+# Discover, secure, and connect services across any runtime platform.
+consul                  hashicorp/consul                consul                  hashicorp
 
 # Code signing and transparency for containers and binaries.
 cosign                  sigstore/cosign
@@ -51,6 +57,9 @@ fzf                     junegunn/fzf
 
 # GitHub's official command-line tool.
 gh                      cli/cli
+
+# The official command-line interface for HashiCorp Cloud Platform.
+hcp                     hashicorp/hcp                   hcp                     hashicorp
 
 # The Kubernetes package manager.
 helm                    helm/helm
@@ -111,11 +120,17 @@ minikube                kubernetes/minikube
 # A Docker-compatible command-line interface for containerd.
 nerdctl                 containerd/nerdctl
 
+# Orchestrate applications across on-premises and cloud environments.
+nomad                   hashicorp/nomad                 nomad                   hashicorp
+
 # An open source, general-purpose policy engine.
 opa                     open-policy-agent/opa
 
 # An OCI registry client for managing artifacts, images, and packages.
 oras                    oras-project/oras
+
+# Build automated machine images from a single source configuration.
+packer                  hashicorp/packer                packer                  hashicorp
 
 # Manage cloud infrastructure declaratively with OpenTofu.
 opentofu                opentofu/opentofu
@@ -153,6 +168,9 @@ terraform               hashicorp/terraform             terraform               
 
 # Generate documentation from Terraform modules in various formats.
 terraform-docs          terraform-docs/terraform-docs
+
+# The Terraform language server for editor integrations.
+terraform-ls            hashicorp/terraform-ls          terraform-ls            hashicorp
 
 # Orchestrate OpenTofu and Terraform infrastructure as code at scale.
 terragrunt              gruntwork-io/terragrunt
