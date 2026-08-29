@@ -406,6 +406,18 @@ The `kubectl` and `kubeadm` aliases use the fixed official Kubernetes layout:
 
 Explicit versions such as `kubectl@v1.36.2` skip the stable-version lookup.
 
+The `helm` alias uses the fixed official `get.helm.sh` layout:
+
+- `/helm4-latest-version` to resolve the current stable version;
+- `/helm-VERSION-OS-ARCH.tar.gz` to download the platform archive;
+- the matching `.sha256` sidecar to verify it before extraction.
+
+Release-tag listing uses bounded public metadata from Helm's GitHub releases.
+Archive and checksum downloads remain restricted to `get.helm.sh`, and redirects
+outside the configured source are rejected. Explicit versions such as
+`helm@4.2.0` and `helm@v4.2.0` both normalize to Helm's leading-`v` archive
+layout.
+
 The `boundary`, `consul`, `hcp`, `nomad`, `packer`, `terraform`, `terraform-ls`,
 and `vault` aliases use `releases.hashicorp.com`. ghget discovers stable versions
 from the official product index, confirms the requested

@@ -76,13 +76,21 @@ func TestLookupReturnsAssetHint(t *testing.T) {
 }
 
 func TestLookupReturnsBackend(t *testing.T) {
-	for _, alias := range []string{"kubeadm", "kubectl"} {
-		entry, found, err := Lookup(alias)
+	tests := []struct {
+		alias   string
+		backend string
+	}{
+		{alias: "helm", backend: "helm"},
+		{alias: "kubeadm", backend: "kubernetes"},
+		{alias: "kubectl", backend: "kubernetes"},
+	}
+	for _, test := range tests {
+		entry, found, err := Lookup(test.alias)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !found || entry.AssetHint != alias || entry.Backend != "kubernetes" {
-			t.Fatalf("Lookup(%q) = %#v, %v, want Kubernetes backend for %q", alias, entry, found, alias)
+		if !found || entry.AssetHint != test.alias || entry.Backend != test.backend {
+			t.Fatalf("Lookup(%q) = %#v, %v, want %s backend", test.alias, entry, found, test.backend)
 		}
 	}
 }
@@ -94,7 +102,7 @@ func TestPopularDevOpsAliases(t *testing.T) {
 		{Alias: "consul", Repository: "hashicorp/consul", AssetHint: "consul", Backend: "hashicorp"},
 		{Alias: "dra", Repository: "devmatteini/dra"},
 		{Alias: "hcp", Repository: "hashicorp/hcp", AssetHint: "hcp", Backend: "hashicorp"},
-		{Alias: "helm", Repository: "helm/helm"},
+		{Alias: "helm", Repository: "helm/helm", AssetHint: "helm", Backend: "helm"},
 		{Alias: "hl", Repository: "pamburus/hl"},
 		{Alias: "hwatch", Repository: "blacknon/hwatch"},
 		{Alias: "jq", Repository: "jqlang/jq"},
