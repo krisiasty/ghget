@@ -89,8 +89,11 @@ func TestLookupReturnsBackend(t *testing.T) {
 
 func TestPopularDevOpsAliases(t *testing.T) {
 	tests := []Entry{
+		{Alias: "boundary", Repository: "hashicorp/boundary", AssetHint: "boundary", Backend: "hashicorp"},
 		{Alias: "calicoctl", Repository: "projectcalico/calico"},
+		{Alias: "consul", Repository: "hashicorp/consul", AssetHint: "consul", Backend: "hashicorp"},
 		{Alias: "dra", Repository: "devmatteini/dra"},
+		{Alias: "hcp", Repository: "hashicorp/hcp", AssetHint: "hcp", Backend: "hashicorp"},
 		{Alias: "helm", Repository: "helm/helm"},
 		{Alias: "hl", Repository: "pamburus/hl"},
 		{Alias: "hwatch", Repository: "blacknon/hwatch"},
@@ -98,10 +101,13 @@ func TestPopularDevOpsAliases(t *testing.T) {
 		{Alias: "k9s", Repository: "derailed/k9s"},
 		{Alias: "kubeadm", Repository: "kubernetes/kubernetes"},
 		{Alias: "kubectl", Repository: "kubernetes/kubectl"},
+		{Alias: "nomad", Repository: "hashicorp/nomad", AssetHint: "nomad", Backend: "hashicorp"},
 		{Alias: "openbao", Repository: "openbao/openbao"},
 		{Alias: "opentofu", Repository: "opentofu/opentofu"},
+		{Alias: "packer", Repository: "hashicorp/packer", AssetHint: "packer", Backend: "hashicorp"},
 		{Alias: "rclone", Repository: "rclone/rclone"},
 		{Alias: "terraform", Repository: "hashicorp/terraform", AssetHint: "terraform", Backend: "hashicorp"},
+		{Alias: "terraform-ls", Repository: "hashicorp/terraform-ls", AssetHint: "terraform-ls", Backend: "hashicorp"},
 		{Alias: "vault", Repository: "hashicorp/vault", AssetHint: "vault", Backend: "hashicorp"},
 	}
 	for _, test := range tests {
