@@ -69,6 +69,30 @@ func TestParseOptionsUpgrade(t *testing.T) {
 	}
 }
 
+func TestParseOptionsVersionAliases(t *testing.T) {
+	for _, flag := range []string{"-v", "--version"} {
+		opts, err := parseOptions([]string{flag})
+		if err != nil {
+			t.Fatalf("parseOptions(%q): %v", flag, err)
+		}
+		if !opts.version {
+			t.Errorf("parseOptions(%q) version = false, want true", flag)
+		}
+	}
+}
+
+func TestParseOptionsSkipVersionCheckAliases(t *testing.T) {
+	for _, flag := range []string{"-n", "--skip-version-check"} {
+		opts, err := parseOptions([]string{"--version", flag})
+		if err != nil {
+			t.Fatalf("parseOptions(%q): %v", flag, err)
+		}
+		if !opts.skipVersionCheck {
+			t.Errorf("parseOptions(%q) skipVersionCheck = false, want true", flag)
+		}
+	}
+}
+
 func TestParseOptionsExpandsOutputPath(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {

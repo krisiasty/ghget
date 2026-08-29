@@ -197,9 +197,9 @@ list uses ascending alphabetic order instead.
 | | `--flat` | Extract all files directly into the destination directory |
 | | `--file ARCHIVE_PATH` | Extract one exact archive member; repeatable and requires `--extract` |
 | | `--upgrade` | Replace the running `ghget` binary with the latest release |
-| | `--skip-version-check` | Do not check for a newer `ghget` release at startup |
+| `-n` | `--skip-version-check` | Do not check for a newer `ghget` release at startup |
 | | `--debug` | Log structured HTTP telemetry to standard error |
-| | `--version` | Show version, commit, and build timestamp |
+| `-v` | `--version` | Show version, commit, and build timestamp |
 
 Options may appear before or after the target. Existing files are never
 overwritten unless `--force` is supplied.

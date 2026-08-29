@@ -60,7 +60,7 @@ func parseOptions(args []string) (options, error) {
 		switch name {
 		case "-h", "--help":
 			opts.help = true
-		case "--version":
+		case "-v", "--version":
 			opts.version = true
 		case "--upgrade":
 			opts.upgrade = true
@@ -104,7 +104,7 @@ func parseOptions(args []string) (options, error) {
 			opts.files = append(opts.files, v)
 		case "--debug":
 			opts.debug = true
-		case "--skip-version-check":
+		case "-n", "--skip-version-check":
 			opts.skipVersionCheck = true
 		case "-d", "--dir":
 			v, err := value()
