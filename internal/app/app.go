@@ -64,9 +64,9 @@ Options:
       --flat                 extract all files directly into the destination directory
       --file ARCHIVE_PATH    extract only this exact archive member; repeatable
       --upgrade              replace the running ghget binary with the latest release
-      --skip-version-check   do not check for a newer ghget release at startup
+  -n, --skip-version-check   do not check for a newer ghget release at startup
       --debug                log HTTP telemetry to stderr
-      --version              show version and build information
+  -v, --version              show version and build information
   -h, --help                 show this help
 `
 

@@ -88,7 +88,7 @@ func TestRunChecksForUpdatesUnlessSkipped(t *testing.T) {
 		wantResolve int
 	}{
 		{name: "default", args: []string{"--version"}, wantResolve: 1},
-		{name: "skipped", args: []string{"--version", "--skip-version-check"}},
+		{name: "skipped", args: []string{"-v", "-n"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			client := &fakeClient{tag: "v1.2.0"}
