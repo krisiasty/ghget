@@ -504,6 +504,11 @@ func escapeGlob(value string) string {
 	return escaped.String()
 }
 
+// checkExistingDownloads reports the assets whose downloaded file is already in
+// place with a matching checksum. It only applies when the asset itself is the
+// deliverable: --extract and --install unpack a temporary copy, so an archive
+// left in the destination directory says nothing about whether the programs or
+// files it carries were ever written.
 func (a *App) checkExistingDownloads(
 	selected []string,
 	assets map[string]source.Asset,
@@ -511,7 +516,7 @@ func (a *App) checkExistingDownloads(
 	verification verificationData,
 ) (map[string]bool, error) {
 	skip := make(map[string]bool)
-	if opts.extract || opts.force {
+	if opts.extract || opts.install || opts.force {
 		return skip, nil
 	}
 	for _, name := range selected {

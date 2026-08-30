@@ -437,3 +437,28 @@ func readIfExists(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+func TestInstallProceedsWhenMatchingArchiveAlreadyExists(t *testing.T) {
+	archive := tarGzip(t, map[string]tarEntry{"tool": {mode: 0o755, content: "tool binary"}})
+	client := &fakeClient{
+		tag:     "v1.0.0",
+		assets:  []gh.Asset{{Name: "tool_1.0.0_linux_amd64.tar.gz", Digest: digest(archive)}},
+		content: map[string]string{"tool_1.0.0_linux_amd64.tar.gz": archive},
+	}
+	directory := t.TempDir()
+	// A previous run kept the archive in the destination directory.
+	stale := filepath.Join(directory, "tool_1.0.0_linux_amd64.tar.gz")
+	if err := os.WriteFile(stale, []byte(archive), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stderr strings.Builder
+	app := newTestApp(client, io.Discard, &stderr, linuxAMD64)
+	if err := app.Run(context.Background(), []string{"acme/tool", "--auto", "--install", "--dir", directory}); err != nil {
+		t.Fatal(err)
+	}
+	installed := filepath.Join(directory, "tool")
+	content, err := os.ReadFile(installed) //nolint:gosec // The path is confined to the test's temporary directory.
+	if err != nil || string(content) != "tool binary" {
+		t.Fatalf("installed content = %q, err = %v, stderr = %q", content, err, stderr.String())
+	}
+}
