@@ -62,7 +62,7 @@ gh                      cli/cli
 hcp                     hashicorp/hcp                   hcp                     hashicorp
 
 # The Kubernetes package manager.
-helm                    helm/helm
+helm                    helm/helm                         helm                   helm
 
 # A fast and powerful log processor.
 hl                      pamburus/hl
