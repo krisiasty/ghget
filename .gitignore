@@ -34,3 +34,6 @@ go.work.sum
 downloads/
 dist/
 ghget
+
+# graphify knowledge graph output
+graphify-out/
