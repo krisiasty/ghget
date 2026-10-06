@@ -34,6 +34,9 @@ ctop                    bcicen/ctop
 # A modern runtime for JavaScript and TypeScript.
 deno                    denoland/deno
 
+# A single-host, read-only disk diagnostics TUI.
+diskwatch               matthart1983/diskwatch
+
 # Explore each layer in a Docker image.
 dive                    wagoodman/dive
 
@@ -82,6 +85,9 @@ k6                      grafana/k6
 # A Kubernetes command-line interface for managing clusters in style.
 k9s                     derailed/k9s
 
+# Linux kernel observability in the terminal.
+kernwatch               matthart1983/kernwatch
+
 # Run local Kubernetes clusters using Docker container nodes.
 kind                    kubernetes-sigs/kind
 
@@ -119,6 +125,9 @@ minikube                kubernetes/minikube
 
 # A Docker-compatible command-line interface for containerd.
 nerdctl                 containerd/nerdctl
+
+# Real-time network diagnostics in the terminal.
+netwatch                matthart1983/netwatch
 
 # Orchestrate applications across on-premises and cloud environments.
 nomad                   hashicorp/nomad                 nomad                   hashicorp
@@ -159,6 +168,9 @@ sops                    getsops/sops
 
 # Tail logs from multiple Kubernetes pods and containers.
 stern                   stern/stern
+
+# A single-host system diagnostics TUI.
+syswatch                matthart1983/syswatch
 
 # A modern Linux distribution built for Kubernetes.
 talosctl                siderolabs/talos
